@@ -30,10 +30,13 @@ export default function Attendance() {
   const { user, isSuperAdmin, isTeacher, profile } = useAuth();
   const canManageAttendance = isSuperAdmin || isTeacher;
   
-  // For teachers, filter subjects by their branch
+  // For teachers, filter subjects by their branch (using subject_branches junction table)
   const { data: allSubjects, isLoading: subjectsLoading } = useSubjects();
   const subjects = isTeacher && profile?.branch_id 
-    ? allSubjects?.filter(s => s.branch_id === profile.branch_id) 
+    ? allSubjects?.filter(s => 
+        s.subject_branches?.some(sb => sb.branch_id === profile.branch_id) || 
+        s.branch_id === profile.branch_id
+      ) 
     : allSubjects;
   
   const { data: enrolledStudents, isLoading: studentsLoading } = useEnrolledStudents(selectedSubject || undefined);
