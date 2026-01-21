@@ -77,6 +77,17 @@ export default function Analytics() {
     fetchWeeklyTrend();
   }, []);
 
+  // Helper to get branch IDs from a subject using junction table
+  const getSubjectBranchIds = (subject: any): string[] => {
+    if (subject.subject_branches && subject.subject_branches.length > 0) {
+      return subject.subject_branches
+        .filter((sb: any) => sb.is_active)
+        .map((sb: any) => sb.branch_id);
+    }
+    // Fall back to single branch_id
+    return subject.branch_id ? [subject.branch_id] : [];
+  };
+
   // Calculate stats
   const totalStudents = students?.length || 0;
   const atRiskStudents = students?.filter(s => s.accessStatus === 'at_risk' || s.accessStatus === 'blocked').length || 0;
@@ -85,10 +96,16 @@ export default function Analytics() {
     : 0;
   const activeSubjects = subjects?.filter(s => s.is_active).length || 0;
 
-  // Calculate branch statistics
+  // Calculate branch statistics - count subjects via junction table
   const branchStats = branches?.map(branch => {
     const branchStudents = students?.filter(s => s.branch_id === branch.id) || [];
-    const branchSubjects = subjects?.filter(s => s.branch_id === branch.id) || [];
+    
+    // Count subjects that belong to this branch via junction table
+    const branchSubjects = subjects?.filter(s => {
+      const subjectBranchIds = getSubjectBranchIds(s);
+      return subjectBranchIds.includes(branch.id);
+    }) || [];
+    
     const avgAtt = branchStudents.length 
       ? Math.round(branchStudents.reduce((sum, s) => sum + (s.overallAttendance || 0), 0) / branchStudents.length)
       : 0;

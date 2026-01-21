@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Checkbox } from '@/components/ui/checkbox';
 import { useCreateSubject } from '@/hooks/useSubjects';
 import { useBranches } from '@/hooks/useBranches';
 import { Loader2 } from 'lucide-react';
@@ -17,7 +18,7 @@ interface AddSubjectDialogProps {
 export function AddSubjectDialog({ open, onOpenChange }: AddSubjectDialogProps) {
   const [name, setName] = useState('');
   const [code, setCode] = useState('');
-  const [branchId, setBranchId] = useState('');
+  const [branchIds, setBranchIds] = useState<string[]>([]);
   const [semester, setSemester] = useState('');
   const [credits, setCredits] = useState('3');
   const [description, setDescription] = useState('');
@@ -25,13 +26,23 @@ export function AddSubjectDialog({ open, onOpenChange }: AddSubjectDialogProps) 
   const createSubject = useCreateSubject();
   const { data: branches } = useBranches();
 
+  const activeBranches = branches?.filter(b => b.is_active) || [];
+
+  const handleBranchToggle = (branchId: string, checked: boolean) => {
+    if (checked) {
+      setBranchIds(prev => [...prev, branchId]);
+    } else {
+      setBranchIds(prev => prev.filter(id => id !== branchId));
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     await createSubject.mutateAsync({
       name,
       code: code.toUpperCase(),
-      branch_id: branchId,
+      branch_ids: branchIds,
       semester: semester ? parseInt(semester) : undefined,
       credits: parseInt(credits) || 3,
       description: description || undefined,
@@ -40,7 +51,7 @@ export function AddSubjectDialog({ open, onOpenChange }: AddSubjectDialogProps) 
     // Reset form
     setName('');
     setCode('');
-    setBranchId('');
+    setBranchIds([]);
     setSemester('');
     setCredits('3');
     setDescription('');
@@ -79,19 +90,28 @@ export function AddSubjectDialog({ open, onOpenChange }: AddSubjectDialogProps) 
           </div>
           
           <div className="space-y-2">
-            <Label htmlFor="branch">Branch *</Label>
-            <Select value={branchId} onValueChange={setBranchId} required>
-              <SelectTrigger>
-                <SelectValue placeholder="Select a branch" />
-              </SelectTrigger>
-              <SelectContent>
-                {branches?.filter(b => b.is_active).map((branch) => (
-                  <SelectItem key={branch.id} value={branch.id}>
-                    {branch.name} ({branch.code})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Label>Branches * (select at least one)</Label>
+            <div className="grid grid-cols-2 gap-2 p-3 border rounded-md max-h-40 overflow-y-auto">
+              {activeBranches.length === 0 ? (
+                <p className="col-span-2 text-sm text-muted-foreground">No active branches available</p>
+              ) : (
+                activeBranches.map((branch) => (
+                  <div key={branch.id} className="flex items-center space-x-2">
+                    <Checkbox
+                      id={`branch-${branch.id}`}
+                      checked={branchIds.includes(branch.id)}
+                      onCheckedChange={(checked) => handleBranchToggle(branch.id, checked as boolean)}
+                    />
+                    <label
+                      htmlFor={`branch-${branch.id}`}
+                      className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                    >
+                      {branch.name} ({branch.code})
+                    </label>
+                  </div>
+                ))
+              )}
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
@@ -138,7 +158,7 @@ export function AddSubjectDialog({ open, onOpenChange }: AddSubjectDialogProps) 
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
-            <Button type="submit" disabled={createSubject.isPending || !name || !code || !branchId}>
+            <Button type="submit" disabled={createSubject.isPending || !name || !code || branchIds.length === 0}>
               {createSubject.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Add Subject
             </Button>

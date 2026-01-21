@@ -102,14 +102,16 @@ export function useEnrolledStudents(subjectId?: string) {
     queryKey: ['enrolled-students', subjectId],
     enabled: !!subjectId,
     queryFn: async () => {
-      // First, get the subject's branch
-      const { data: subject, error: subjectError } = await supabase
-        .from('subjects')
+      // First, get the subject's branches from junction table
+      const { data: subjectBranches, error: subjectError } = await supabase
+        .from('subject_branches')
         .select('branch_id')
-        .eq('id', subjectId!)
-        .single();
+        .eq('subject_id', subjectId!)
+        .eq('is_active', true);
       
       if (subjectError) throw subjectError;
+
+      const branchIds = subjectBranches?.map(sb => sb.branch_id) || [];
 
       // Check for explicit enrollments first
       const { data: enrollments, error: enrollError } = await supabase
@@ -125,17 +127,17 @@ export function useEnrolledStudents(subjectId?: string) {
       
       if (enrollError) throw enrollError;
 
-      // If no explicit enrollments, get all students from the subject's branch
+      // If no explicit enrollments, get all students from the subject's branches
       let studentsList: any[] = [];
       
       if (enrollments && enrollments.length > 0) {
         studentsList = enrollments;
-      } else if (subject?.branch_id) {
-        // Get all active students in the branch
+      } else if (branchIds.length > 0) {
+        // Get all active students in any of the branches
         const { data: branchStudents, error: branchError } = await supabase
           .from('profiles')
           .select('id, full_name, email, enrollment_number, avatar_url')
-          .eq('branch_id', subject.branch_id)
+          .in('branch_id', branchIds)
           .eq('is_active', true);
         
         if (branchError) throw branchError;
