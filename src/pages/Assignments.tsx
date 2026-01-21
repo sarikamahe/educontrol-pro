@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { FileText, Plus, Search, Calendar, Clock, Upload, Lock, CheckCircle2 } from 'lucide-react';
 import { format, addDays, isPast } from 'date-fns';
+import { useAuth } from '@/contexts/AuthContext';
 
 const mockAssignments = [
   { id: '1', title: 'Linked List Implementation', subject: 'Data Structures', dueDate: addDays(new Date(), 3), status: 'pending', isLocked: false, maxScore: 100 },
@@ -29,6 +30,9 @@ const getStatusBadge = (status: string, score?: number, maxScore?: number) => {
 };
 
 export default function Assignments() {
+  const { isSuperAdmin, isTeacher } = useAuth();
+  const canManageAssignments = isSuperAdmin || isTeacher;
+
   return (
     <DashboardLayout>
       <div className="space-y-6">
@@ -37,10 +41,12 @@ export default function Assignments() {
             <h1 className="text-3xl font-bold tracking-tight">Assignments</h1>
             <p className="text-muted-foreground">View and submit your assignments</p>
           </div>
-          <Button>
-            <Plus className="mr-2 h-4 w-4" />
-            Create Assignment
-          </Button>
+          {canManageAssignments && (
+            <Button>
+              <Plus className="mr-2 h-4 w-4" />
+              Create Assignment
+            </Button>
+          )}
         </div>
 
         <div className="flex items-center gap-4">
