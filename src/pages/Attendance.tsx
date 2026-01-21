@@ -12,6 +12,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { CalendarIcon, Check, X, Clock, Save, Loader2, Lock, AlertTriangle } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSubjects } from '@/hooks/useSubjects';
 import { useEnrolledStudents, useMarkAttendance, useAttendanceRecords } from '@/hooks/useAttendance';
@@ -82,7 +83,7 @@ export default function Attendance() {
     if (!selectedSubject || !user || isAttendanceLocked) return;
     
     const records = Object.values(attendanceData)
-      .filter(entry => entry.status !== 'not_marked')
+      .filter(entry => entry.status !== 'not_marked' && entry.student_id && entry.student_id.trim() !== '')
       .map(entry => ({
         student_id: entry.student_id,
         subject_id: selectedSubject,
@@ -93,6 +94,8 @@ export default function Attendance() {
     
     if (records.length > 0) {
       markAttendance.mutate(records);
+    } else {
+      toast.error('No valid attendance entries to save. Please mark at least one student.');
     }
   };
 
