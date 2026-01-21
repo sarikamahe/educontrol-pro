@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { FileText, Plus, Search, Calendar, Clock, Upload, Lock, CheckCircle2, Loader2 } from 'lucide-react';
+import { FileText, Plus, Search, Calendar, Clock, Upload, CheckCircle2, Loader2 } from 'lucide-react';
 import { format, isPast } from 'date-fns';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAssignments } from '@/hooks/useAssignments';
@@ -42,15 +42,15 @@ export default function Assignments() {
   const renderAssignmentCard = (assignment: any) => {
     const dueDate = new Date(assignment.due_date);
     const isOverdue = isPast(dueDate);
-    const isLocked = assignment.is_attendance_required && isStudent;
+    // If student can see this assignment via RLS, they have access
+    // RLS already filters out assignments the student can't access
 
     return (
-      <Card key={assignment.id} className={`${isLocked ? 'opacity-75' : ''}`}>
+      <Card key={assignment.id}>
         <CardHeader className="flex flex-row items-start justify-between space-y-0">
           <div className="space-y-1">
             <div className="flex items-center gap-2">
               <CardTitle className="text-lg">{assignment.title}</CardTitle>
-              {isLocked && <Lock className="h-4 w-4 text-destructive" />}
             </div>
             <p className="text-sm text-muted-foreground">{assignment.subjects?.name || 'Unknown Subject'}</p>
           </div>
@@ -70,7 +70,7 @@ export default function Assignments() {
             </div>
             <div className="flex gap-2">
               <Button variant="outline" size="sm">View Details</Button>
-              {isStudent && !isLocked && !isOverdue && (
+              {isStudent && !isOverdue && (
                 <Button size="sm">
                   <Upload className="mr-2 h-4 w-4" />
                   Submit
@@ -78,11 +78,6 @@ export default function Assignments() {
               )}
             </div>
           </div>
-          {isLocked && (
-            <p className="text-xs text-destructive mt-3">
-              Submission locked: Attendance below 75%
-            </p>
-          )}
           {assignment.description && (
             <p className="text-sm text-muted-foreground mt-3 line-clamp-2">
               {assignment.description}
