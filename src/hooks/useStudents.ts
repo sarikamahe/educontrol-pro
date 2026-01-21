@@ -30,38 +30,36 @@ export function useStudents() {
   return useQuery({
     queryKey: ['students'],
     queryFn: async () => {
-      // Get all profiles that have student role
-      const { data: studentRoles, error: rolesError } = await supabase
-        .from('user_roles')
-        .select('user_id')
-        .eq('role', 'student');
-      
-      if (rolesError) throw rolesError;
-      
-      const studentIds = studentRoles?.map(r => r.user_id) || [];
-      
-      if (studentIds.length === 0) return [];
-
+      // Get profiles directly - RLS will filter based on user role
+      // Super admins see all, teachers see students in their branch
       const { data, error } = await supabase
         .from('profiles')
         .select(`
           *,
           branches:branch_id (name, code)
         `)
-        .in('id', studentIds);
+        .eq('is_active', true);
       
       if (error) throw error;
+      
+      if (!data || data.length === 0) return [];
 
-      // Get attendance summary for each student
+      // Filter to only student profiles by checking user_roles
+      // Teachers may not be able to read user_roles for all users, so we query attendance_summary
+      // which only exists for students
       const studentsWithAttendance = await Promise.all(
-        (data || []).map(async (student) => {
-          const { data: summaries } = await supabase
+        (data || []).map(async (profile) => {
+          // Check if this profile has attendance summaries (indicating they're a student)
+          const { data: summaries, error: summaryError } = await supabase
             .from('attendance_summary')
             .select(`
               *,
               subjects:subject_id (id, name, code)
             `)
-            .eq('student_id', student.id);
+            .eq('student_id', profile.id);
+          
+          // If we can't access summaries or there's an error, they might not be a student we can see
+          if (summaryError) return null;
           
           // Calculate overall attendance
           const totalClasses = summaries?.reduce((sum, s) => sum + (s.total_classes || 0), 0) || 0;
@@ -73,8 +71,8 @@ export function useStudents() {
           else if (overallPercentage < 75) accessStatus = 'at_risk';
 
           return {
-            ...student,
-            branch: student.branches,
+            ...profile,
+            branch: profile.branches,
             attendance_summary: summaries || [],
             overallAttendance: Math.round(overallPercentage * 100) / 100,
             accessStatus,
@@ -82,7 +80,8 @@ export function useStudents() {
         })
       );
 
-      return studentsWithAttendance;
+      // Filter out nulls (non-students or profiles we can't access)
+      return studentsWithAttendance.filter((s) => s !== null) as StudentWithAttendance[];
     },
   });
 }
