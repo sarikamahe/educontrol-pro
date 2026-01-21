@@ -4,19 +4,39 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { BookOpen, Plus, Search, Clock, Loader2 } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { BookOpen, Plus, Search, Clock, Loader2, MoreVertical, Pencil, Trash2 } from 'lucide-react';
 import { useSubjects } from '@/hooks/useSubjects';
+import { useAuth } from '@/contexts/AuthContext';
 import { AddSubjectDialog } from '@/components/subjects/AddSubjectDialog';
+import { EditSubjectDialog } from '@/components/subjects/EditSubjectDialog';
+import { DeleteSubjectDialog } from '@/components/subjects/DeleteSubjectDialog';
 
 export default function Subjects() {
   const { data: subjects, isLoading } = useSubjects();
+  const { isSuperAdmin, isTeacher, profile } = useAuth();
   const [search, setSearch] = useState('');
   const [addOpen, setAddOpen] = useState(false);
+  const [editSubject, setEditSubject] = useState<any>(null);
+  const [deleteSubject, setDeleteSubject] = useState<any>(null);
 
-  const filteredSubjects = subjects?.filter(s =>
-    s.name.toLowerCase().includes(search.toLowerCase()) ||
-    s.code.toLowerCase().includes(search.toLowerCase())
-  ) || [];
+  const canManageSubjects = isSuperAdmin || isTeacher;
+
+  // Filter subjects - teachers see only their branch subjects
+  const filteredSubjects = subjects?.filter(s => {
+    const matchesSearch = s.name.toLowerCase().includes(search.toLowerCase()) ||
+      s.code.toLowerCase().includes(search.toLowerCase());
+    
+    if (isTeacher && profile?.branch_id) {
+      return matchesSearch && s.branch_id === profile.branch_id;
+    }
+    return matchesSearch;
+  }) || [];
 
   return (
     <DashboardLayout>
@@ -26,10 +46,12 @@ export default function Subjects() {
             <h1 className="text-3xl font-bold tracking-tight">Subjects</h1>
             <p className="text-muted-foreground">Manage academic subjects and courses</p>
           </div>
-          <Button onClick={() => setAddOpen(true)}>
-            <Plus className="mr-2 h-4 w-4" />
-            Add Subject
-          </Button>
+          {canManageSubjects && (
+            <Button onClick={() => setAddOpen(true)}>
+              <Plus className="mr-2 h-4 w-4" />
+              Add Subject
+            </Button>
+          )}
         </div>
 
         <div className="flex items-center gap-4">
@@ -52,7 +74,33 @@ export default function Subjects() {
                     <CardTitle className="text-lg">{subject.name}</CardTitle>
                     <p className="text-sm text-muted-foreground">{subject.code}</p>
                   </div>
-                  <Badge variant={subject.is_active ? 'default' : 'secondary'}>{subject.is_active ? 'Active' : 'Inactive'}</Badge>
+                  <div className="flex items-center gap-2">
+                    <Badge variant={subject.is_active ? 'default' : 'secondary'}>
+                      {subject.is_active ? 'Active' : 'Inactive'}
+                    </Badge>
+                    {canManageSubjects && (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-8 w-8">
+                            <MoreVertical className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => setEditSubject(subject)}>
+                            <Pencil className="mr-2 h-4 w-4" />
+                            Edit
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => setDeleteSubject(subject)}
+                            className="text-destructive focus:text-destructive"
+                          >
+                            <Trash2 className="mr-2 h-4 w-4" />
+                            Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    )}
+                  </div>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-3">
@@ -69,10 +117,26 @@ export default function Subjects() {
                 </CardContent>
               </Card>
             ))}
+            {filteredSubjects.length === 0 && (
+              <div className="col-span-full text-center py-12 text-muted-foreground">
+                No subjects found
+              </div>
+            )}
           </div>
         )}
       </div>
+      
       <AddSubjectDialog open={addOpen} onOpenChange={setAddOpen} />
+      <EditSubjectDialog 
+        subject={editSubject} 
+        open={!!editSubject} 
+        onOpenChange={(open) => !open && setEditSubject(null)} 
+      />
+      <DeleteSubjectDialog 
+        subject={deleteSubject} 
+        open={!!deleteSubject} 
+        onOpenChange={(open) => !open && setDeleteSubject(null)} 
+      />
     </DashboardLayout>
   );
 }

@@ -188,3 +188,25 @@ export function useUpdateSubject() {
     },
   });
 }
+
+export function useDeleteSubject() {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from('subjects')
+        .update({ is_active: false })
+        .eq('id', id);
+      
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['subjects'] });
+      toast.success('Subject deleted successfully');
+    },
+    onError: (error: Error) => {
+      toast.error('Failed to delete subject: ' + error.message);
+    },
+  });
+}
