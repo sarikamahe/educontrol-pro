@@ -158,7 +158,14 @@ export default function Students() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <AccessStatusBadge status={student.accessStatus as 'allowed' | 'at_risk' | 'blocked'} />
+                        <div className="flex items-center gap-2">
+                          <AccessStatusBadge status={student.accessStatus as 'allowed' | 'at_risk' | 'blocked'} />
+                          {student.hasActiveOverride && (
+                            <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200">
+                              Override
+                            </Badge>
+                          )}
+                        </div>
                       </TableCell>
                       {canManageStudents && (
                         <TableCell>
