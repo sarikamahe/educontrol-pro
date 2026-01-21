@@ -11,7 +11,13 @@ export function useSubjects() {
         .from('subjects')
         .select(`
           *,
-          branches:branch_id (name, code)
+          branches:branch_id (name, code),
+          subject_branches (
+            id,
+            branch_id,
+            is_active,
+            branches:branch_id (id, name, code)
+          )
         `)
         .order('name');
       
@@ -32,7 +38,13 @@ export function useTeacherSubjects(teacherId?: string) {
           *,
           subjects:subject_id (
             *,
-            branches:branch_id (name, code)
+            branches:branch_id (name, code),
+            subject_branches (
+              id,
+              branch_id,
+              is_active,
+              branches:branch_id (id, name, code)
+            )
           )
         `)
         .eq('teacher_id', teacherId!)
@@ -49,14 +61,16 @@ export function useSubjectStudents(subjectId?: string) {
     queryKey: ['subject-students', subjectId],
     enabled: !!subjectId,
     queryFn: async () => {
-      // First, get the subject's branch
-      const { data: subject, error: subjectError } = await supabase
-        .from('subjects')
+      // First, get the subject's branches from junction table
+      const { data: subjectBranches, error: subjectError } = await supabase
+        .from('subject_branches')
         .select('branch_id')
-        .eq('id', subjectId!)
-        .single();
+        .eq('subject_id', subjectId!)
+        .eq('is_active', true);
       
       if (subjectError) throw subjectError;
+
+      const branchIds = subjectBranches?.map(sb => sb.branch_id) || [];
 
       // Check for explicit enrollments first
       const { data: enrollments, error: enrollError } = await supabase
@@ -72,17 +86,17 @@ export function useSubjectStudents(subjectId?: string) {
       
       if (enrollError) throw enrollError;
 
-      // If no explicit enrollments, get all students from the subject's branch
+      // If no explicit enrollments, get all students from the subject's branches
       let studentsList: any[] = [];
       
       if (enrollments && enrollments.length > 0) {
         studentsList = enrollments;
-      } else if (subject?.branch_id) {
-        // Get all active students in the branch
+      } else if (branchIds.length > 0) {
+        // Get all active students in any of the branches
         const { data: branchStudents, error: branchError } = await supabase
           .from('profiles')
           .select('id, email, full_name, enrollment_number, avatar_url')
-          .eq('branch_id', subject.branch_id)
+          .in('branch_id', branchIds)
           .eq('is_active', true);
         
         if (branchError) throw branchError;
@@ -141,21 +155,43 @@ export function useCreateSubject() {
       name: string;
       code: string;
       description?: string;
-      branch_id: string;
+      branch_ids: string[];
       credits?: number;
       semester?: number;
     }) => {
+      const { branch_ids, ...subjectData } = subject;
+      
+      // Use the first branch as the primary branch_id for backward compatibility
+      const primaryBranchId = branch_ids[0];
+      
+      // Create the subject
       const { data, error } = await supabase
         .from('subjects')
-        .insert(subject)
+        .insert({ ...subjectData, branch_id: primaryBranchId })
         .select()
         .single();
       
       if (error) throw error;
+      
+      // Create junction table entries for all branches
+      if (branch_ids.length > 0) {
+        const branchEntries = branch_ids.map(branchId => ({
+          subject_id: data.id,
+          branch_id: branchId,
+        }));
+        
+        const { error: junctionError } = await supabase
+          .from('subject_branches')
+          .insert(branchEntries);
+        
+        if (junctionError) throw junctionError;
+      }
+      
       return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['subjects'] });
+      queryClient.invalidateQueries({ queryKey: ['branch-stats'] });
       toast.success('Subject created successfully');
     },
     onError: (error: Error) => {
@@ -168,19 +204,49 @@ export function useUpdateSubject() {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: async ({ id, ...subject }: Partial<Subject> & { id: string }) => {
+    mutationFn: async ({ id, branch_ids, ...subject }: Partial<Subject> & { id: string; branch_ids?: string[] }) => {
+      // Update primary branch_id if branch_ids provided
+      const updateData = branch_ids && branch_ids.length > 0 
+        ? { ...subject, branch_id: branch_ids[0] }
+        : subject;
+      
       const { data, error } = await supabase
         .from('subjects')
-        .update(subject)
+        .update(updateData)
         .eq('id', id)
         .select()
         .single();
       
       if (error) throw error;
+      
+      // Sync junction table if branch_ids provided
+      if (branch_ids) {
+        // Delete existing branch associations
+        await supabase
+          .from('subject_branches')
+          .delete()
+          .eq('subject_id', id);
+        
+        // Insert new branch associations
+        if (branch_ids.length > 0) {
+          const branchEntries = branch_ids.map(branchId => ({
+            subject_id: id,
+            branch_id: branchId,
+          }));
+          
+          const { error: junctionError } = await supabase
+            .from('subject_branches')
+            .insert(branchEntries);
+          
+          if (junctionError) throw junctionError;
+        }
+      }
+      
       return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['subjects'] });
+      queryClient.invalidateQueries({ queryKey: ['branch-stats'] });
       toast.success('Subject updated successfully');
     },
     onError: (error: Error) => {
@@ -196,6 +262,9 @@ export function useDeleteSubject() {
     mutationFn: async (id: string) => {
       // Delete related records first to avoid foreign key constraints
       // Order matters: delete dependent tables before the subject
+      
+      // Delete subject_branches (junction table) - CASCADE should handle but be explicit
+      await supabase.from('subject_branches').delete().eq('subject_id', id);
       
       // Delete attendance summary
       await supabase.from('attendance_summary').delete().eq('subject_id', id);
@@ -239,6 +308,7 @@ export function useDeleteSubject() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['subjects'] });
+      queryClient.invalidateQueries({ queryKey: ['branch-stats'] });
       toast.success('Subject deleted successfully');
     },
     onError: (error: Error) => {

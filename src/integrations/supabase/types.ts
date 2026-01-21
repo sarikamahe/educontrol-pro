@@ -420,6 +420,45 @@ export type Database = {
           },
         ]
       }
+      subject_branches: {
+        Row: {
+          branch_id: string
+          created_at: string | null
+          id: string
+          is_active: boolean | null
+          subject_id: string
+        }
+        Insert: {
+          branch_id: string
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          subject_id: string
+        }
+        Update: {
+          branch_id?: string
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          subject_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "subject_branches_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "subject_branches_subject_id_fkey"
+            columns: ["subject_id"]
+            isOneToOne: false
+            referencedRelation: "subjects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       subjects: {
         Row: {
           branch_id: string
@@ -616,6 +655,10 @@ export type Database = {
       }
       student_has_access: {
         Args: { _student_id: string; _subject_id: string }
+        Returns: boolean
+      }
+      subject_has_branch: {
+        Args: { _branch_id: string; _subject_id: string }
         Returns: boolean
       }
     }

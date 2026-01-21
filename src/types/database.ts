@@ -153,3 +153,11 @@ export interface Submission {
   graded_at: string | null;
   graded_by: string | null;
 }
+
+export interface SubjectBranch {
+  id: string;
+  subject_id: string;
+  branch_id: string;
+  is_active: boolean;
+  created_at: string;
+}

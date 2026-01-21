@@ -27,16 +27,49 @@ export default function Subjects() {
 
   const canManageSubjects = isSuperAdmin || isTeacher;
 
-  // Filter subjects - teachers see only their branch subjects
+  // Helper function to get branch IDs from a subject
+  const getSubjectBranchIds = (subject: any): string[] => {
+    if (subject.subject_branches && subject.subject_branches.length > 0) {
+      return subject.subject_branches
+        .filter((sb: any) => sb.is_active)
+        .map((sb: any) => sb.branch_id);
+    }
+    // Fall back to single branch_id
+    return subject.branch_id ? [subject.branch_id] : [];
+  };
+
+  // Filter subjects - teachers see subjects that include their branch
   const filteredSubjects = subjects?.filter(s => {
     const matchesSearch = s.name.toLowerCase().includes(search.toLowerCase()) ||
       s.code.toLowerCase().includes(search.toLowerCase());
     
     if (isTeacher && profile?.branch_id) {
-      return matchesSearch && s.branch_id === profile.branch_id;
+      const subjectBranchIds = getSubjectBranchIds(s);
+      return matchesSearch && subjectBranchIds.includes(profile.branch_id);
     }
     return matchesSearch;
   }) || [];
+
+  // Helper to render branch badges
+  const renderBranchBadges = (subject: any) => {
+    if (subject.subject_branches && subject.subject_branches.length > 0) {
+      const activeBranches = subject.subject_branches.filter((sb: any) => sb.is_active && sb.branches);
+      if (activeBranches.length === 0) {
+        return <span className="text-muted-foreground">No Branch</span>;
+      }
+      return (
+        <div className="flex flex-wrap gap-1">
+          {activeBranches.map((sb: any) => (
+            <Badge key={sb.id} variant="outline" className="text-xs">
+              {sb.branches?.code || 'Unknown'}
+            </Badge>
+          ))}
+        </div>
+      );
+    }
+    // Fall back to single branch display
+    return <span>{(subject.branches as any)?.name || 'No Branch'}</span>;
+  };
 
   return (
     <DashboardLayout>
@@ -105,8 +138,8 @@ export default function Subjects() {
                 <CardContent>
                   <div className="space-y-3">
                     <div className="flex items-center gap-2 text-sm">
-                      <BookOpen className="h-4 w-4 text-muted-foreground" />
-                      <span>{(subject.branches as any)?.name || 'No Branch'}</span>
+                      <BookOpen className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                      {renderBranchBadges(subject)}
                     </div>
                     <div className="flex items-center gap-1 text-sm">
                       <Clock className="h-4 w-4 text-muted-foreground" />
