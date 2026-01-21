@@ -1,45 +1,86 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { CalendarIcon, Check, X, Clock, Save } from 'lucide-react';
+import { CalendarIcon, Check, X, Clock, Save, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
+import { useSubjects } from '@/hooks/useSubjects';
+import { useEnrolledStudents, useMarkAttendance, useAttendanceRecords } from '@/hooks/useAttendance';
 
-const mockStudents = [
-  { id: '1', name: 'Alice Johnson', enrollmentNo: 'CS2021001', attendance: 85, status: 'present' },
-  { id: '2', name: 'Bob Smith', enrollmentNo: 'CS2021002', attendance: 72, status: 'absent' },
-  { id: '3', name: 'Carol White', enrollmentNo: 'CS2021003', attendance: 90, status: 'present' },
-  { id: '4', name: 'David Brown', enrollmentNo: 'CS2021004', attendance: 68, status: 'late' },
-  { id: '5', name: 'Eve Davis', enrollmentNo: 'CS2021005', attendance: 78, status: 'present' },
-];
-
-const subjects = [
-  { id: '1', name: 'Data Structures', code: 'CS201' },
-  { id: '2', name: 'Database Management', code: 'CS301' },
-  { id: '3', name: 'Machine Learning', code: 'CS401' },
-];
+interface AttendanceEntry {
+  student_id: string;
+  status: 'present' | 'absent' | 'late' | 'not_marked';
+}
 
 export default function Attendance() {
   const [date, setDate] = useState<Date>(new Date());
   const [selectedSubject, setSelectedSubject] = useState<string>('');
-  const [attendanceData, setAttendanceData] = useState(mockStudents);
-  const { isSuperAdmin, isTeacher } = useAuth();
+  const [attendanceData, setAttendanceData] = useState<Record<string, AttendanceEntry>>({});
+  
+  const { user, isSuperAdmin, isTeacher } = useAuth();
   const canManageAttendance = isSuperAdmin || isTeacher;
+  
+  const { data: subjects, isLoading: subjectsLoading } = useSubjects();
+  const { data: enrolledStudents, isLoading: studentsLoading } = useEnrolledStudents(selectedSubject || undefined);
+  const { data: existingRecords } = useAttendanceRecords(
+    selectedSubject || undefined, 
+    format(date, 'yyyy-MM-dd')
+  );
+  const markAttendance = useMarkAttendance();
 
-  const toggleStatus = (studentId: string, newStatus: string) => {
-    setAttendanceData(prev =>
-      prev.map(student =>
-        student.id === studentId ? { ...student, status: newStatus } : student
-      )
-    );
+  // Initialize attendance data from existing records
+  useEffect(() => {
+    if (existingRecords && enrolledStudents) {
+      const newAttendanceData: Record<string, AttendanceEntry> = {};
+      
+      enrolledStudents.forEach(enrollment => {
+        const existingRecord = existingRecords.find(
+          r => r.student_id === enrollment.profiles?.id
+        );
+        newAttendanceData[enrollment.profiles?.id || ''] = {
+          student_id: enrollment.profiles?.id || '',
+          status: (existingRecord?.status as any) || 'not_marked',
+        };
+      });
+      
+      setAttendanceData(newAttendanceData);
+    }
+  }, [existingRecords, enrolledStudents]);
+
+  const toggleStatus = (studentId: string, newStatus: 'present' | 'absent' | 'late') => {
+    setAttendanceData(prev => ({
+      ...prev,
+      [studentId]: {
+        student_id: studentId,
+        status: newStatus,
+      },
+    }));
+  };
+
+  const handleSaveAttendance = () => {
+    if (!selectedSubject || !user) return;
+    
+    const records = Object.values(attendanceData)
+      .filter(entry => entry.status !== 'not_marked')
+      .map(entry => ({
+        student_id: entry.student_id,
+        subject_id: selectedSubject,
+        date: format(date, 'yyyy-MM-dd'),
+        status: entry.status as 'present' | 'absent' | 'late' | 'excused',
+        marked_by: user.id,
+      }));
+    
+    if (records.length > 0) {
+      markAttendance.mutate(records);
+    }
   };
 
   const getStatusBadge = (status: string) => {
@@ -55,6 +96,8 @@ export default function Attendance() {
     }
   };
 
+  const isLoading = subjectsLoading || studentsLoading;
+
   return (
     <DashboardLayout>
       <div className="space-y-6">
@@ -63,9 +106,13 @@ export default function Attendance() {
             <h1 className="text-3xl font-bold tracking-tight">Attendance</h1>
             <p className="text-muted-foreground">Mark and manage student attendance</p>
           </div>
-          {canManageAttendance && (
-            <Button>
-              <Save className="mr-2 h-4 w-4" />
+          {canManageAttendance && selectedSubject && (
+            <Button onClick={handleSaveAttendance} disabled={markAttendance.isPending}>
+              {markAttendance.isPending ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Save className="mr-2 h-4 w-4" />
+              )}
               Save Attendance
             </Button>
           )}
@@ -77,7 +124,7 @@ export default function Attendance() {
               <SelectValue placeholder="Select Subject" />
             </SelectTrigger>
             <SelectContent>
-              {subjects.map((subject) => (
+              {subjects?.map((subject) => (
                 <SelectItem key={subject.id} value={subject.id}>
                   {subject.name} ({subject.code})
                 </SelectItem>
@@ -103,77 +150,102 @@ export default function Attendance() {
             <CardTitle>Mark Attendance</CardTitle>
           </CardHeader>
           <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Student</TableHead>
-                  <TableHead>Enrollment No.</TableHead>
-                  <TableHead>Overall Attendance</TableHead>
-                  <TableHead>Today's Status</TableHead>
-                  {canManageAttendance && <TableHead>Actions</TableHead>}
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {attendanceData.map((student) => (
-                  <TableRow key={student.id}>
-                    <TableCell>
-                      <div className="flex items-center gap-3">
-                        <Avatar className="h-8 w-8">
-                          <AvatarFallback>{student.name.charAt(0)}</AvatarFallback>
-                        </Avatar>
-                        <span className="font-medium">{student.name}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">{student.enrollmentNo}</TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <div className="w-16 h-2 bg-muted rounded-full overflow-hidden">
-                          <div
-                            className={cn(
-                              'h-full rounded-full',
-                              student.attendance >= 75 ? 'bg-green-500' : student.attendance >= 60 ? 'bg-yellow-500' : 'bg-red-500'
-                            )}
-                            style={{ width: `${student.attendance}%` }}
-                          />
-                        </div>
-                        <span className="text-sm">{student.attendance}%</span>
-                      </div>
-                    </TableCell>
-                    <TableCell>{getStatusBadge(student.status)}</TableCell>
-                    {canManageAttendance && (
-                      <TableCell>
-                        <div className="flex gap-1">
-                          <Button
-                            size="sm"
-                            variant={student.status === 'present' ? 'default' : 'outline'}
-                            className="h-8 w-8 p-0"
-                            onClick={() => toggleStatus(student.id, 'present')}
-                          >
-                            <Check className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant={student.status === 'absent' ? 'destructive' : 'outline'}
-                            className="h-8 w-8 p-0"
-                            onClick={() => toggleStatus(student.id, 'absent')}
-                          >
-                            <X className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant={student.status === 'late' ? 'secondary' : 'outline'}
-                            className="h-8 w-8 p-0"
-                            onClick={() => toggleStatus(student.id, 'late')}
-                          >
-                            <Clock className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    )}
+            {!selectedSubject ? (
+              <div className="text-center py-12 text-muted-foreground">
+                Please select a subject to mark attendance
+              </div>
+            ) : isLoading ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+              </div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Student</TableHead>
+                    <TableHead>Enrollment No.</TableHead>
+                    <TableHead>Overall Attendance</TableHead>
+                    <TableHead>Today's Status</TableHead>
+                    {canManageAttendance && <TableHead>Actions</TableHead>}
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {enrolledStudents?.map((enrollment) => {
+                    const student = enrollment.profiles;
+                    const summary = enrollment.attendance_summary;
+                    const attendancePercentage = summary?.attendance_percentage ?? 100;
+                    const studentStatus = attendanceData[student?.id || '']?.status || 'not_marked';
+                    
+                    return (
+                      <TableRow key={enrollment.id}>
+                        <TableCell>
+                          <div className="flex items-center gap-3">
+                            <Avatar className="h-8 w-8">
+                              <AvatarImage src={student?.avatar_url || undefined} />
+                              <AvatarFallback>{student?.full_name?.charAt(0) || 'S'}</AvatarFallback>
+                            </Avatar>
+                            <span className="font-medium">{student?.full_name || 'Unknown'}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">{student?.enrollment_number || '-'}</TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <div className="w-16 h-2 bg-muted rounded-full overflow-hidden">
+                              <div
+                                className={cn(
+                                  'h-full rounded-full',
+                                  attendancePercentage >= 75 ? 'bg-green-500' : attendancePercentage >= 65 ? 'bg-yellow-500' : 'bg-red-500'
+                                )}
+                                style={{ width: `${Math.min(attendancePercentage, 100)}%` }}
+                              />
+                            </div>
+                            <span className="text-sm">{Math.round(attendancePercentage)}%</span>
+                          </div>
+                        </TableCell>
+                        <TableCell>{getStatusBadge(studentStatus)}</TableCell>
+                        {canManageAttendance && (
+                          <TableCell>
+                            <div className="flex gap-1">
+                              <Button
+                                size="sm"
+                                variant={studentStatus === 'present' ? 'default' : 'outline'}
+                                className="h-8 w-8 p-0"
+                                onClick={() => toggleStatus(student?.id || '', 'present')}
+                              >
+                                <Check className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant={studentStatus === 'absent' ? 'destructive' : 'outline'}
+                                className="h-8 w-8 p-0"
+                                onClick={() => toggleStatus(student?.id || '', 'absent')}
+                              >
+                                <X className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant={studentStatus === 'late' ? 'secondary' : 'outline'}
+                                className="h-8 w-8 p-0"
+                                onClick={() => toggleStatus(student?.id || '', 'late')}
+                              >
+                                <Clock className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        )}
+                      </TableRow>
+                    );
+                  })}
+                  {(!enrolledStudents || enrolledStudents.length === 0) && (
+                    <TableRow>
+                      <TableCell colSpan={canManageAttendance ? 5 : 4} className="text-center py-8 text-muted-foreground">
+                        No students enrolled in this subject
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            )}
           </CardContent>
         </Card>
       </div>
