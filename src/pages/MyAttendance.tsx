@@ -5,37 +5,40 @@ import { Progress } from '@/components/ui/progress';
 import { Calendar } from '@/components/ui/calendar';
 import { AttendanceProgressBar } from '@/components/dashboard/AttendanceProgressBar';
 import { AccessStatusBadge } from '@/components/dashboard/AccessStatusBadge';
-import { ClipboardCheck, TrendingUp, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { ClipboardCheck, TrendingUp, AlertTriangle, CheckCircle2, X, Loader2 } from 'lucide-react';
 import { useState } from 'react';
-
-const subjectAttendance = [
-  { id: '1', name: 'Data Structures', code: 'CS201', attended: 34, total: 40, percentage: 85, status: 'allowed' as const },
-  { id: '2', name: 'Database Management', code: 'CS301', attended: 28, total: 38, percentage: 74, status: 'at_risk' as const },
-  { id: '3', name: 'Machine Learning', code: 'CS401', attended: 18, total: 25, percentage: 72, status: 'at_risk' as const },
-  { id: '4', name: 'Operating Systems', code: 'CS302', attended: 32, total: 35, percentage: 91, status: 'allowed' as const },
-];
-
-const recentRecords = [
-  { date: '2026-01-20', subject: 'Data Structures', status: 'present' },
-  { date: '2026-01-20', subject: 'Database Management', status: 'present' },
-  { date: '2026-01-19', subject: 'Machine Learning', status: 'absent' },
-  { date: '2026-01-19', subject: 'Operating Systems', status: 'present' },
-  { date: '2026-01-18', subject: 'Data Structures', status: 'present' },
-];
-
-const getOverallStats = () => {
-  const totalAttended = subjectAttendance.reduce((sum, s) => sum + s.attended, 0);
-  const totalClasses = subjectAttendance.reduce((sum, s) => sum + s.total, 0);
-  return {
-    attended: totalAttended,
-    total: totalClasses,
-    percentage: Math.round((totalAttended / totalClasses) * 100),
-  };
-};
+import { useAuth } from '@/contexts/AuthContext';
+import { useStudentAttendance } from '@/hooks/useAttendance';
+import { format } from 'date-fns';
 
 export default function MyAttendance() {
   const [date, setDate] = useState<Date | undefined>(new Date());
-  const overall = getOverallStats();
+  const { user } = useAuth();
+  const { data: attendanceData, isLoading } = useStudentAttendance(user?.id);
+
+  if (isLoading) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center py-24">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  const subjectSummaries = attendanceData?.summary || [];
+  const recentRecords = attendanceData?.records || [];
+
+  // Calculate overall stats
+  const totalAttended = subjectSummaries.reduce((sum, s) => sum + (s.classes_attended || 0), 0);
+  const totalClasses = subjectSummaries.reduce((sum, s) => sum + (s.total_classes || 0), 0);
+  const overallPercentage = totalClasses > 0 ? Math.round((totalAttended / totalClasses) * 100) : 100;
+  
+  let overallStatus: 'allowed' | 'at_risk' | 'blocked' = 'allowed';
+  if (overallPercentage < 65) overallStatus = 'blocked';
+  else if (overallPercentage < 75) overallStatus = 'at_risk';
+
+  const subjectsAtRisk = subjectSummaries.filter(s => (s.attendance_percentage || 0) < 75).length;
 
   return (
     <DashboardLayout>
@@ -52,10 +55,10 @@ export default function MyAttendance() {
               <ClipboardCheck className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold">{overall.percentage}%</div>
-              <Progress value={overall.percentage} className="mt-2" />
+              <div className="text-3xl font-bold">{overallPercentage}%</div>
+              <Progress value={overallPercentage} className="mt-2" />
               <p className="text-xs text-muted-foreground mt-2">
-                {overall.attended} of {overall.total} classes attended
+                {totalAttended} of {totalClasses} classes attended
               </p>
             </CardContent>
           </Card>
@@ -67,12 +70,12 @@ export default function MyAttendance() {
             </CardHeader>
             <CardContent>
               <div className="mt-1">
-                <AccessStatusBadge status={overall.percentage >= 75 ? 'allowed' : overall.percentage >= 70 ? 'at_risk' : 'blocked'} />
+                <AccessStatusBadge status={overallStatus} />
               </div>
               <p className="text-xs text-muted-foreground mt-3">
-                {overall.percentage >= 75 
+                {overallStatus === 'allowed'
                   ? 'You have full access to all resources'
-                  : overall.percentage >= 70
+                  : overallStatus === 'at_risk'
                   ? 'Warning: Your access may be restricted soon'
                   : 'Your access to resources is currently restricted'}
               </p>
@@ -85,7 +88,7 @@ export default function MyAttendance() {
               <AlertTriangle className="h-4 w-4 text-yellow-500" />
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold">{subjectAttendance.filter(s => s.percentage < 75).length}</div>
+              <div className="text-3xl font-bold">{subjectsAtRisk}</div>
               <p className="text-xs text-muted-foreground mt-2">
                 subjects below 75% threshold
               </p>
@@ -100,22 +103,35 @@ export default function MyAttendance() {
               <CardDescription>Your attendance percentage per subject</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              {subjectAttendance.map((subject) => (
-                <div key={subject.id} className="p-4 border rounded-lg space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="font-medium">{subject.name}</p>
-                      <p className="text-sm text-muted-foreground">{subject.code}</p>
-                    </div>
-                    <AccessStatusBadge status={subject.status} />
-                  </div>
-                  <AttendanceProgressBar 
-                    percentage={subject.percentage} 
-                    classesAttended={subject.attended} 
-                    totalClasses={subject.total} 
-                  />
+              {subjectSummaries.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  No enrollment data found
                 </div>
-              ))}
+              ) : (
+                subjectSummaries.map((summary) => {
+                  const percentage = summary.attendance_percentage || 0;
+                  let status: 'allowed' | 'at_risk' | 'blocked' = 'allowed';
+                  if (percentage < 65) status = 'blocked';
+                  else if (percentage < 75) status = 'at_risk';
+
+                  return (
+                    <div key={summary.id} className="p-4 border rounded-lg space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="font-medium">{summary.subjects?.name || 'Unknown Subject'}</p>
+                          <p className="text-sm text-muted-foreground">{summary.subjects?.code || '-'}</p>
+                        </div>
+                        <AccessStatusBadge status={status} />
+                      </div>
+                      <AttendanceProgressBar 
+                        percentage={Math.round(percentage)} 
+                        classesAttended={summary.classes_attended || 0} 
+                        totalClasses={summary.total_classes || 0} 
+                      />
+                    </div>
+                  );
+                })
+              )}
             </CardContent>
           </Card>
 
@@ -139,21 +155,32 @@ export default function MyAttendance() {
                 <CardTitle className="text-base">Recent Records</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
-                {recentRecords.slice(0, 5).map((record, index) => (
-                  <div key={index} className="flex items-center justify-between text-sm">
-                    <div>
-                      <p className="font-medium">{record.subject}</p>
-                      <p className="text-xs text-muted-foreground">{record.date}</p>
-                    </div>
-                    <Badge variant={record.status === 'present' ? 'outline' : 'destructive'} className="text-xs">
-                      {record.status === 'present' ? (
-                        <><CheckCircle2 className="h-3 w-3 mr-1" />Present</>
-                      ) : (
-                        'Absent'
-                      )}
-                    </Badge>
+                {recentRecords.length === 0 ? (
+                  <div className="text-center py-4 text-muted-foreground text-sm">
+                    No attendance records found
                   </div>
-                ))}
+                ) : (
+                  recentRecords.slice(0, 5).map((record) => (
+                    <div key={record.id} className="flex items-center justify-between text-sm">
+                      <div>
+                        <p className="font-medium">{record.subjects?.name || 'Unknown'}</p>
+                        <p className="text-xs text-muted-foreground">{format(new Date(record.date), 'MMM dd, yyyy')}</p>
+                      </div>
+                      <Badge 
+                        variant={record.status === 'present' || record.status === 'late' ? 'outline' : 'destructive'} 
+                        className="text-xs"
+                      >
+                        {record.status === 'present' ? (
+                          <><CheckCircle2 className="h-3 w-3 mr-1" />Present</>
+                        ) : record.status === 'late' ? (
+                          <><CheckCircle2 className="h-3 w-3 mr-1" />Late</>
+                        ) : (
+                          <><X className="h-3 w-3 mr-1" />Absent</>
+                        )}
+                      </Badge>
+                    </div>
+                  ))
+                )}
               </CardContent>
             </Card>
           </div>

@@ -1,33 +1,102 @@
+import { useState } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { FolderOpen, Plus, Search, FileText, Video, File, Download, Lock, Eye } from 'lucide-react';
+import { FolderOpen, Plus, Search, FileText, Video, File, Download, Lock, Eye, Loader2 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-const mockResources = [
-  { id: '1', title: 'Introduction to Data Structures', type: 'pdf', subject: 'Data Structures', size: '2.4 MB', downloads: 45, isLocked: false },
-  { id: '2', title: 'Sorting Algorithms Lecture', type: 'video', subject: 'Data Structures', size: '156 MB', downloads: 32, isLocked: false },
-  { id: '3', title: 'SQL Query Practice Set', type: 'pdf', subject: 'Database Management', size: '1.2 MB', downloads: 28, isLocked: true },
-  { id: '4', title: 'ER Diagram Tutorial', type: 'video', subject: 'Database Management', size: '89 MB', downloads: 41, isLocked: false },
-  { id: '5', title: 'Neural Networks Guide', type: 'pdf', subject: 'Machine Learning', size: '4.8 MB', downloads: 56, isLocked: true },
-];
+import { useResources } from '@/hooks/useResources';
+import { supabase } from '@/integrations/supabase/client';
 
 const getFileIcon = (type: string) => {
   switch (type) {
-    case 'pdf':
+    case 'notes':
       return <FileText className="h-8 w-8 text-red-500" />;
-    case 'video':
+    case 'recording':
       return <Video className="h-8 w-8 text-blue-500" />;
     default:
       return <File className="h-8 w-8 text-muted-foreground" />;
   }
 };
 
+const formatFileSize = (bytes: number | null) => {
+  if (!bytes) return 'Unknown size';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+};
+
 export default function Resources() {
-  const { isSuperAdmin, isTeacher } = useAuth();
+  const { isSuperAdmin, isTeacher, user } = useAuth();
   const canManageResources = isSuperAdmin || isTeacher;
+  const { data: resources, isLoading } = useResources();
+  const [search, setSearch] = useState('');
+
+  const filteredResources = resources?.filter(r =>
+    r.title?.toLowerCase().includes(search.toLowerCase()) ||
+    r.subjects?.name?.toLowerCase().includes(search.toLowerCase())
+  ) || [];
+
+  const documentResources = filteredResources.filter(r => r.resource_type === 'notes' || r.resource_type === 'guidance');
+  const videoResources = filteredResources.filter(r => r.resource_type === 'recording');
+
+  const handleDownload = async (fileUrl: string, fileName: string) => {
+    window.open(fileUrl, '_blank');
+  };
+
+  const renderResourceCard = (resource: any, showLocked = true) => {
+    const isLocked = resource.is_attendance_required && !canManageResources;
+    
+    return (
+      <Card key={resource.id} className={`hover:shadow-md transition-shadow ${isLocked ? 'opacity-75' : ''}`}>
+        <CardHeader className="flex flex-row items-start gap-4 space-y-0">
+          <div className="p-2 bg-muted rounded-lg">
+            {getFileIcon(resource.resource_type)}
+          </div>
+          <div className="flex-1 space-y-1">
+            <CardTitle className="text-base line-clamp-2">{resource.title}</CardTitle>
+            <p className="text-sm text-muted-foreground">{resource.subjects?.name || 'Unknown Subject'}</p>
+          </div>
+          {isLocked && showLocked && (
+            <Lock className="h-4 w-4 text-destructive" />
+          )}
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3 text-sm text-muted-foreground">
+              <span>{formatFileSize(resource.file_size)}</span>
+              <Badge variant="outline" className="text-xs">{resource.resource_type}</Badge>
+            </div>
+            <div className="flex gap-1">
+              <Button 
+                size="sm" 
+                variant="ghost" 
+                disabled={isLocked}
+                onClick={() => resource.file_url && handleDownload(resource.file_url, resource.file_name || 'download')}
+              >
+                <Eye className="h-4 w-4" />
+              </Button>
+              <Button 
+                size="sm" 
+                variant="ghost" 
+                disabled={isLocked}
+                onClick={() => resource.file_url && handleDownload(resource.file_url, resource.file_name || 'download')}
+              >
+                <Download className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+          {isLocked && showLocked && (
+            <p className="text-xs text-destructive mt-2">
+              Locked: Attendance below 75%
+            </p>
+          )}
+        </CardContent>
+      </Card>
+    );
+  };
 
   return (
     <DashboardLayout>
@@ -48,96 +117,73 @@ export default function Resources() {
         <div className="flex items-center gap-4">
           <div className="relative flex-1 max-w-sm">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input placeholder="Search resources..." className="pl-9" />
+            <Input 
+              placeholder="Search resources..." 
+              className="pl-9"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
           </div>
         </div>
 
-        <Tabs defaultValue="all" className="space-y-4">
-          <TabsList>
-            <TabsTrigger value="all">All Resources</TabsTrigger>
-            <TabsTrigger value="documents">Documents</TabsTrigger>
-            <TabsTrigger value="videos">Videos</TabsTrigger>
-          </TabsList>
+        {isLoading ? (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+          </div>
+        ) : (
+          <Tabs defaultValue="all" className="space-y-4">
+            <TabsList>
+              <TabsTrigger value="all">All Resources ({filteredResources.length})</TabsTrigger>
+              <TabsTrigger value="documents">Documents ({documentResources.length})</TabsTrigger>
+              <TabsTrigger value="videos">Videos ({videoResources.length})</TabsTrigger>
+            </TabsList>
 
-          <TabsContent value="all" className="space-y-4">
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {mockResources.map((resource) => (
-                <Card key={resource.id} className={`hover:shadow-md transition-shadow ${resource.isLocked ? 'opacity-75' : ''}`}>
-                  <CardHeader className="flex flex-row items-start gap-4 space-y-0">
-                    <div className="p-2 bg-muted rounded-lg">
-                      {getFileIcon(resource.type)}
-                    </div>
-                    <div className="flex-1 space-y-1">
-                      <CardTitle className="text-base line-clamp-2">{resource.title}</CardTitle>
-                      <p className="text-sm text-muted-foreground">{resource.subject}</p>
-                    </div>
-                    {resource.isLocked && (
-                      <Lock className="h-4 w-4 text-destructive" />
-                    )}
-                  </CardHeader>
-                  <CardContent>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                        <span>{resource.size}</span>
-                        <span>•</span>
-                        <span>{resource.downloads} downloads</span>
-                      </div>
-                      <div className="flex gap-1">
-                        <Button size="sm" variant="ghost" disabled={resource.isLocked}>
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                        <Button size="sm" variant="ghost" disabled={resource.isLocked}>
-                          <Download className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-                    {resource.isLocked && (
-                      <p className="text-xs text-destructive mt-2">
-                        Locked: Attendance below 75%
-                      </p>
-                    )}
+            <TabsContent value="all" className="space-y-4">
+              {filteredResources.length === 0 ? (
+                <Card>
+                  <CardContent className="py-12 text-center text-muted-foreground">
+                    <FolderOpen className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                    <p>No resources found</p>
                   </CardContent>
                 </Card>
-              ))}
-            </div>
-          </TabsContent>
+              ) : (
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                  {filteredResources.map((resource) => renderResourceCard(resource))}
+                </div>
+              )}
+            </TabsContent>
 
-          <TabsContent value="documents">
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {mockResources.filter(r => r.type === 'pdf').map((resource) => (
-                <Card key={resource.id} className="hover:shadow-md transition-shadow">
-                  <CardHeader className="flex flex-row items-start gap-4 space-y-0">
-                    <div className="p-2 bg-muted rounded-lg">
-                      {getFileIcon(resource.type)}
-                    </div>
-                    <div className="flex-1 space-y-1">
-                      <CardTitle className="text-base">{resource.title}</CardTitle>
-                      <p className="text-sm text-muted-foreground">{resource.subject}</p>
-                    </div>
-                  </CardHeader>
+            <TabsContent value="documents">
+              {documentResources.length === 0 ? (
+                <Card>
+                  <CardContent className="py-12 text-center text-muted-foreground">
+                    <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                    <p>No documents found</p>
+                  </CardContent>
                 </Card>
-              ))}
-            </div>
-          </TabsContent>
+              ) : (
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                  {documentResources.map((resource) => renderResourceCard(resource))}
+                </div>
+              )}
+            </TabsContent>
 
-          <TabsContent value="videos">
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {mockResources.filter(r => r.type === 'video').map((resource) => (
-                <Card key={resource.id} className="hover:shadow-md transition-shadow">
-                  <CardHeader className="flex flex-row items-start gap-4 space-y-0">
-                    <div className="p-2 bg-muted rounded-lg">
-                      {getFileIcon(resource.type)}
-                    </div>
-                    <div className="flex-1 space-y-1">
-                      <CardTitle className="text-base">{resource.title}</CardTitle>
-                      <p className="text-sm text-muted-foreground">{resource.subject}</p>
-                    </div>
-                  </CardHeader>
+            <TabsContent value="videos">
+              {videoResources.length === 0 ? (
+                <Card>
+                  <CardContent className="py-12 text-center text-muted-foreground">
+                    <Video className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                    <p>No videos found</p>
+                  </CardContent>
                 </Card>
-              ))}
-            </div>
-          </TabsContent>
-        </Tabs>
+              ) : (
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                  {videoResources.map((resource) => renderResourceCard(resource))}
+                </div>
+              )}
+            </TabsContent>
+          </Tabs>
+        )}
       </div>
     </DashboardLayout>
   );
