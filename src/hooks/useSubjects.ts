@@ -194,6 +194,42 @@ export function useDeleteSubject() {
   
   return useMutation({
     mutationFn: async (id: string) => {
+      // Delete related records first to avoid foreign key constraints
+      // Order matters: delete dependent tables before the subject
+      
+      // Delete attendance summary
+      await supabase.from('attendance_summary').delete().eq('subject_id', id);
+      
+      // Delete attendance records
+      await supabase.from('attendance_records').delete().eq('subject_id', id);
+      
+      // Delete enrollments
+      await supabase.from('enrollments').delete().eq('subject_id', id);
+      
+      // Delete teacher-subject assignments
+      await supabase.from('teacher_subjects').delete().eq('subject_id', id);
+      
+      // Delete resources
+      await supabase.from('resources').delete().eq('subject_id', id);
+      
+      // Get assignments for this subject to delete their submissions
+      const { data: assignments } = await supabase
+        .from('assignments')
+        .select('id')
+        .eq('subject_id', id);
+      
+      if (assignments && assignments.length > 0) {
+        const assignmentIds = assignments.map(a => a.id);
+        await supabase.from('submissions').delete().in('assignment_id', assignmentIds);
+      }
+      
+      // Delete assignments
+      await supabase.from('assignments').delete().eq('subject_id', id);
+      
+      // Delete access overrides for this subject
+      await supabase.from('access_overrides').delete().eq('subject_id', id);
+      
+      // Finally, delete the subject
       const { error } = await supabase
         .from('subjects')
         .delete()
