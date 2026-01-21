@@ -2,9 +2,11 @@ import { cn } from '@/lib/utils';
 import { Progress } from '@/components/ui/progress';
 import type { AccessStatus } from '@/types/database';
 
-interface AttendanceProgressBarProps {
+export interface AttendanceProgressBarProps {
   percentage: number;
   accessStatus?: AccessStatus;
+  classesAttended?: number;
+  totalClasses?: number;
   showLabel?: boolean;
   size?: 'sm' | 'md' | 'lg';
   className?: string;
@@ -13,6 +15,8 @@ interface AttendanceProgressBarProps {
 export function AttendanceProgressBar({
   percentage,
   accessStatus,
+  classesAttended,
+  totalClasses,
   showLabel = true,
   size = 'md',
   className
@@ -49,7 +53,14 @@ export function AttendanceProgressBar({
     <div className={cn('space-y-1.5', className)}>
       {showLabel && (
         <div className="flex items-center justify-between text-sm">
-          <span className="font-medium">{percentage.toFixed(1)}%</span>
+          <div className="flex items-center gap-2">
+            <span className="font-medium">{percentage.toFixed(1)}%</span>
+            {classesAttended !== undefined && totalClasses !== undefined && (
+              <span className="text-xs text-muted-foreground">
+                ({classesAttended}/{totalClasses} classes)
+              </span>
+            )}
+          </div>
           <span className={cn('text-xs font-medium', status.className)}>
             {status.text}
           </span>

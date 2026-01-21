@@ -3,13 +3,16 @@ import { Navigate, useLocation } from 'react-router-dom';
 import type { AppRole } from '@/types/database';
 import { Loader2 } from 'lucide-react';
 
-interface AuthGuardProps {
+export interface AuthGuardProps {
   children: React.ReactNode;
   allowedRoles?: AppRole[];
+  requiredRoles?: AppRole[];
   redirectTo?: string;
 }
 
-export function AuthGuard({ children, allowedRoles, redirectTo = '/login' }: AuthGuardProps) {
+export function AuthGuard({ children, allowedRoles, requiredRoles, redirectTo = '/login' }: AuthGuardProps) {
+  // Support both prop names for flexibility
+  const rolesToCheck = requiredRoles || allowedRoles;
   const { user, roles, loading } = useAuth();
   const location = useLocation();
 
@@ -28,8 +31,8 @@ export function AuthGuard({ children, allowedRoles, redirectTo = '/login' }: Aut
     return <Navigate to={redirectTo} state={{ from: location }} replace />;
   }
 
-  if (allowedRoles && allowedRoles.length > 0) {
-    const hasAllowedRole = allowedRoles.some(role => roles.includes(role));
+  if (rolesToCheck && rolesToCheck.length > 0) {
+    const hasAllowedRole = rolesToCheck.some(role => roles.includes(role));
     if (!hasAllowedRole) {
       return <Navigate to="/unauthorized" replace />;
     }
