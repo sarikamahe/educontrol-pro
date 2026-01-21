@@ -9,6 +9,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { UserPlus, Search, MoreHorizontal, Shield, GraduationCap, Users as UsersIcon, Loader2 } from 'lucide-react';
 import { useUsers } from '@/hooks/useUsers';
 import { useState } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
 
 const getRoleBadge = (roles: string[]) => {
   if (roles.includes('super_admin')) {
@@ -23,6 +24,7 @@ const getRoleBadge = (roles: string[]) => {
 export default function Users() {
   const { data: users, isLoading } = useUsers();
   const [search, setSearch] = useState('');
+  const { isSuperAdmin } = useAuth();
 
   const filteredUsers = users?.filter(u =>
     u.full_name?.toLowerCase().includes(search.toLowerCase()) ||
@@ -37,10 +39,12 @@ export default function Users() {
             <h1 className="text-3xl font-bold tracking-tight">User Management</h1>
             <p className="text-muted-foreground">Manage users, roles, and permissions</p>
           </div>
-          <Button>
-            <UserPlus className="mr-2 h-4 w-4" />
-            Add User
-          </Button>
+          {isSuperAdmin && (
+            <Button>
+              <UserPlus className="mr-2 h-4 w-4" />
+              Add User
+            </Button>
+          )}
         </div>
 
         <Card>
@@ -70,7 +74,7 @@ export default function Users() {
                     <TableHead>Role</TableHead>
                     <TableHead>Branch</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead className="w-[50px]"></TableHead>
+                    {isSuperAdmin && <TableHead className="w-[50px]"></TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -95,20 +99,22 @@ export default function Users() {
                           {user.is_active ? 'Active' : 'Inactive'}
                         </Badge>
                       </TableCell>
-                      <TableCell>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon">
-                              <MoreHorizontal className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem>Edit User</DropdownMenuItem>
-                            <DropdownMenuItem>Change Role</DropdownMenuItem>
-                            <DropdownMenuItem className="text-destructive">Deactivate</DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </TableCell>
+                      {isSuperAdmin && (
+                        <TableCell>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon">
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem>Edit User</DropdownMenuItem>
+                              <DropdownMenuItem>Change Role</DropdownMenuItem>
+                              <DropdownMenuItem className="text-destructive">Deactivate</DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </TableCell>
+                      )}
                     </TableRow>
                   ))}
                 </TableBody>

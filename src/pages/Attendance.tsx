@@ -11,6 +11,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { CalendarIcon, Check, X, Clock, Save } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/contexts/AuthContext';
 
 const mockStudents = [
   { id: '1', name: 'Alice Johnson', enrollmentNo: 'CS2021001', attendance: 85, status: 'present' },
@@ -30,6 +31,8 @@ export default function Attendance() {
   const [date, setDate] = useState<Date>(new Date());
   const [selectedSubject, setSelectedSubject] = useState<string>('');
   const [attendanceData, setAttendanceData] = useState(mockStudents);
+  const { isSuperAdmin, isTeacher } = useAuth();
+  const canManageAttendance = isSuperAdmin || isTeacher;
 
   const toggleStatus = (studentId: string, newStatus: string) => {
     setAttendanceData(prev =>
@@ -60,10 +63,12 @@ export default function Attendance() {
             <h1 className="text-3xl font-bold tracking-tight">Attendance</h1>
             <p className="text-muted-foreground">Mark and manage student attendance</p>
           </div>
-          <Button>
-            <Save className="mr-2 h-4 w-4" />
-            Save Attendance
-          </Button>
+          {canManageAttendance && (
+            <Button>
+              <Save className="mr-2 h-4 w-4" />
+              Save Attendance
+            </Button>
+          )}
         </div>
 
         <div className="flex flex-wrap gap-4">
@@ -105,7 +110,7 @@ export default function Attendance() {
                   <TableHead>Enrollment No.</TableHead>
                   <TableHead>Overall Attendance</TableHead>
                   <TableHead>Today's Status</TableHead>
-                  <TableHead>Actions</TableHead>
+                  {canManageAttendance && <TableHead>Actions</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -135,34 +140,36 @@ export default function Attendance() {
                       </div>
                     </TableCell>
                     <TableCell>{getStatusBadge(student.status)}</TableCell>
-                    <TableCell>
-                      <div className="flex gap-1">
-                        <Button
-                          size="sm"
-                          variant={student.status === 'present' ? 'default' : 'outline'}
-                          className="h-8 w-8 p-0"
-                          onClick={() => toggleStatus(student.id, 'present')}
-                        >
-                          <Check className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant={student.status === 'absent' ? 'destructive' : 'outline'}
-                          className="h-8 w-8 p-0"
-                          onClick={() => toggleStatus(student.id, 'absent')}
-                        >
-                          <X className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant={student.status === 'late' ? 'secondary' : 'outline'}
-                          className="h-8 w-8 p-0"
-                          onClick={() => toggleStatus(student.id, 'late')}
-                        >
-                          <Clock className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </TableCell>
+                    {canManageAttendance && (
+                      <TableCell>
+                        <div className="flex gap-1">
+                          <Button
+                            size="sm"
+                            variant={student.status === 'present' ? 'default' : 'outline'}
+                            className="h-8 w-8 p-0"
+                            onClick={() => toggleStatus(student.id, 'present')}
+                          >
+                            <Check className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant={student.status === 'absent' ? 'destructive' : 'outline'}
+                            className="h-8 w-8 p-0"
+                            onClick={() => toggleStatus(student.id, 'absent')}
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant={student.status === 'late' ? 'secondary' : 'outline'}
+                            className="h-8 w-8 p-0"
+                            onClick={() => toggleStatus(student.id, 'late')}
+                          >
+                            <Clock className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    )}
                   </TableRow>
                 ))}
               </TableBody>

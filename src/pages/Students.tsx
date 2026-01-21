@@ -8,6 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Search, MoreHorizontal, UserPlus, ShieldCheck, ShieldX, ShieldAlert } from 'lucide-react';
 import { AccessStatusBadge } from '@/components/dashboard/AccessStatusBadge';
+import { useAuth } from '@/contexts/AuthContext';
 
 const mockStudents = [
   { id: '1', name: 'Alice Johnson', email: 'alice@edu.com', enrollmentNo: 'CS2021001', branch: 'Computer Science', attendance: 85, accessStatus: 'allowed' as const },
@@ -18,6 +19,9 @@ const mockStudents = [
 ];
 
 export default function Students() {
+  const { isSuperAdmin, isTeacher } = useAuth();
+  const canManageStudents = isSuperAdmin || isTeacher;
+
   return (
     <DashboardLayout>
       <div className="space-y-6">
@@ -26,10 +30,12 @@ export default function Students() {
             <h1 className="text-3xl font-bold tracking-tight">Students</h1>
             <p className="text-muted-foreground">View and manage student access and attendance</p>
           </div>
-          <Button>
-            <UserPlus className="mr-2 h-4 w-4" />
-            Enroll Student
-          </Button>
+          {canManageStudents && (
+            <Button>
+              <UserPlus className="mr-2 h-4 w-4" />
+              Enroll Student
+            </Button>
+          )}
         </div>
 
         <div className="grid gap-4 md:grid-cols-3">
@@ -81,11 +87,11 @@ export default function Students() {
                   <TableHead>Student</TableHead>
                   <TableHead>Enrollment No.</TableHead>
                   <TableHead>Branch</TableHead>
-                  <TableHead>Attendance</TableHead>
-                  <TableHead>Access Status</TableHead>
-                  <TableHead className="w-[50px]"></TableHead>
-                </TableRow>
-              </TableHeader>
+                    <TableHead>Attendance</TableHead>
+                    <TableHead>Access Status</TableHead>
+                    {canManageStudents && <TableHead className="w-[50px]"></TableHead>}
+                  </TableRow>
+                </TableHeader>
               <TableBody>
                 {mockStudents.map((student) => (
                   <TableRow key={student.id}>
@@ -118,20 +124,22 @@ export default function Students() {
                     <TableCell>
                       <AccessStatusBadge status={student.accessStatus} />
                     </TableCell>
-                    <TableCell>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon">
-                            <MoreHorizontal className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem>View Details</DropdownMenuItem>
-                          <DropdownMenuItem>Grant Override</DropdownMenuItem>
-                          <DropdownMenuItem>View Attendance</DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
+                    {canManageStudents && (
+                      <TableCell>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem>View Details</DropdownMenuItem>
+                            <DropdownMenuItem>Grant Override</DropdownMenuItem>
+                            <DropdownMenuItem>View Attendance</DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    )}
                   </TableRow>
                 ))}
               </TableBody>
