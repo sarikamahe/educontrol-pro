@@ -16,11 +16,14 @@ export interface StudentWithAttendance {
     total_classes: number;
     classes_attended: number;
     subject_id: string;
+    subjects?: { name: string; code: string };
   }[];
   branch?: {
     name: string;
     code: string;
   };
+  overallAttendance: number;
+  accessStatus: string;
 }
 
 export function useStudents() {
