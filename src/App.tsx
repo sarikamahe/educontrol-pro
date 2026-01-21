@@ -9,6 +9,17 @@ import Index from "./pages/Index";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import Dashboard from "./pages/Dashboard";
+import Branches from "./pages/Branches";
+import Users from "./pages/Users";
+import Subjects from "./pages/Subjects";
+import Attendance from "./pages/Attendance";
+import Students from "./pages/Students";
+import Resources from "./pages/Resources";
+import Assignments from "./pages/Assignments";
+import Assistant from "./pages/Assistant";
+import Analytics from "./pages/Analytics";
+import MyAttendance from "./pages/MyAttendance";
+import Settings from "./pages/Settings";
 import Unauthorized from "./pages/Unauthorized";
 import NotFound from "./pages/NotFound";
 
@@ -31,6 +42,94 @@ const App = () => (
               element={
                 <AuthGuard>
                   <Dashboard />
+                </AuthGuard>
+              }
+            />
+            <Route
+              path="/branches"
+              element={
+                <AuthGuard requiredRoles={['super_admin']}>
+                  <Branches />
+                </AuthGuard>
+              }
+            />
+            <Route
+              path="/users"
+              element={
+                <AuthGuard requiredRoles={['super_admin']}>
+                  <Users />
+                </AuthGuard>
+              }
+            />
+            <Route
+              path="/subjects"
+              element={
+                <AuthGuard requiredRoles={['super_admin', 'teacher']}>
+                  <Subjects />
+                </AuthGuard>
+              }
+            />
+            <Route
+              path="/attendance"
+              element={
+                <AuthGuard requiredRoles={['super_admin', 'teacher']}>
+                  <Attendance />
+                </AuthGuard>
+              }
+            />
+            <Route
+              path="/students"
+              element={
+                <AuthGuard requiredRoles={['super_admin', 'teacher']}>
+                  <Students />
+                </AuthGuard>
+              }
+            />
+            <Route
+              path="/resources"
+              element={
+                <AuthGuard>
+                  <Resources />
+                </AuthGuard>
+              }
+            />
+            <Route
+              path="/assignments"
+              element={
+                <AuthGuard>
+                  <Assignments />
+                </AuthGuard>
+              }
+            />
+            <Route
+              path="/assistant"
+              element={
+                <AuthGuard>
+                  <Assistant />
+                </AuthGuard>
+              }
+            />
+            <Route
+              path="/analytics"
+              element={
+                <AuthGuard requiredRoles={['super_admin', 'teacher']}>
+                  <Analytics />
+                </AuthGuard>
+              }
+            />
+            <Route
+              path="/my-attendance"
+              element={
+                <AuthGuard requiredRoles={['student']}>
+                  <MyAttendance />
+                </AuthGuard>
+              }
+            />
+            <Route
+              path="/settings"
+              element={
+                <AuthGuard>
+                  <Settings />
                 </AuthGuard>
               }
             />
