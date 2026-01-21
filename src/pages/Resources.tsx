@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { FolderOpen, Plus, Search, FileText, Video, File, Download, Lock, Eye } from 'lucide-react';
-
+import { useAuth } from '@/contexts/AuthContext';
 const mockResources = [
   { id: '1', title: 'Introduction to Data Structures', type: 'pdf', subject: 'Data Structures', size: '2.4 MB', downloads: 45, isLocked: false },
   { id: '2', title: 'Sorting Algorithms Lecture', type: 'video', subject: 'Data Structures', size: '156 MB', downloads: 32, isLocked: false },
@@ -26,6 +26,9 @@ const getFileIcon = (type: string) => {
 };
 
 export default function Resources() {
+  const { isSuperAdmin, isTeacher } = useAuth();
+  const canManageResources = isSuperAdmin || isTeacher;
+
   return (
     <DashboardLayout>
       <div className="space-y-6">
@@ -34,10 +37,12 @@ export default function Resources() {
             <h1 className="text-3xl font-bold tracking-tight">Resources</h1>
             <p className="text-muted-foreground">Access course materials, lectures, and documents</p>
           </div>
-          <Button>
-            <Plus className="mr-2 h-4 w-4" />
-            Upload Resource
-          </Button>
+          {canManageResources && (
+            <Button>
+              <Plus className="mr-2 h-4 w-4" />
+              Upload Resource
+            </Button>
+          )}
         </div>
 
         <div className="flex items-center gap-4">
