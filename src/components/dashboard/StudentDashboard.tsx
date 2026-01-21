@@ -29,6 +29,7 @@ export default function StudentDashboard() {
   const { user, profile } = useAuth();
   const [overallAttendance, setOverallAttendance] = useState(0);
   const [accessStatus, setAccessStatus] = useState<'allowed' | 'at_risk' | 'blocked'>('allowed');
+  const [hasActiveOverride, setHasActiveOverride] = useState(false);
   const [enrolledSubjects, setEnrolledSubjects] = useState<SubjectWithAttendance[]>([]);
   const [upcomingDeadlines, setUpcomingDeadlines] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -57,6 +58,20 @@ export default function StudentDashboard() {
         .select('*')
         .eq('student_id', user?.id);
 
+      // Check for active global override
+      const { data: overrides } = await supabase
+        .from('access_overrides')
+        .select('*')
+        .eq('student_id', user?.id)
+        .eq('is_active', true)
+        .is('subject_id', null) // Global override
+        .eq('override_type', 'grant');
+
+      const hasOverride = overrides && overrides.length > 0 && 
+        overrides.some(o => !o.expires_at || new Date(o.expires_at) > new Date());
+      
+      setHasActiveOverride(hasOverride);
+
       if (enrollments && summaries) {
         const subjectsWithAttendance = enrollments.map(e => ({
           ...e.subject,
@@ -71,14 +86,19 @@ export default function StudentDashboard() {
           const avgAttendance = totalPercentage / summaries.length;
           setOverallAttendance(avgAttendance);
 
-          // Determine overall access status
-          if (avgAttendance < 65) {
+          // Determine overall access status - override takes precedence
+          if (hasOverride) {
+            setAccessStatus('allowed');
+          } else if (avgAttendance < 65) {
             setAccessStatus('blocked');
           } else if (avgAttendance < 75) {
             setAccessStatus('at_risk');
           } else {
             setAccessStatus('allowed');
           }
+        } else if (hasOverride) {
+          // No attendance data but has override
+          setAccessStatus('allowed');
         }
       }
 
@@ -119,9 +139,18 @@ export default function StudentDashboard() {
           <p className="text-muted-foreground">{today}</p>
         </div>
         <div className="flex flex-col items-start md:items-end gap-2">
-          <AccessStatusBadge status={accessStatus} size="lg" />
+          <div className="flex items-center gap-2">
+            <AccessStatusBadge status={accessStatus} size="lg" />
+            {hasActiveOverride && (
+              <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-800">
+                Override Active
+              </Badge>
+            )}
+          </div>
           <p className="text-sm text-muted-foreground">
-            {accessStatus === 'allowed' 
+            {hasActiveOverride
+              ? 'Access granted via teacher override'
+              : accessStatus === 'allowed' 
               ? 'You have full access to all resources' 
               : accessStatus === 'at_risk'
               ? 'Improve attendance to maintain access'
