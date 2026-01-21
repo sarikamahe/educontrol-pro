@@ -24,6 +24,7 @@ export interface StudentWithAttendance {
   };
   overallAttendance: number;
   accessStatus: string;
+  hasActiveOverride?: boolean;
 }
 
 export function useStudents() {
@@ -61,14 +62,32 @@ export function useStudents() {
           // If we can't access summaries or there's an error, they might not be a student we can see
           if (summaryError) return null;
           
+          // Check for active global access override
+          const { data: overrides } = await supabase
+            .from('access_overrides')
+            .select('*')
+            .eq('student_id', profile.id)
+            .eq('is_active', true)
+            .is('subject_id', null) // Global override
+            .eq('override_type', 'grant');
+          
+          const hasActiveOverride = overrides && overrides.length > 0 && 
+            overrides.some(o => !o.expires_at || new Date(o.expires_at) > new Date());
+          
           // Calculate overall attendance
           const totalClasses = summaries?.reduce((sum, s) => sum + (s.total_classes || 0), 0) || 0;
           const classesAttended = summaries?.reduce((sum, s) => sum + (s.classes_attended || 0), 0) || 0;
           const overallPercentage = totalClasses > 0 ? (classesAttended / totalClasses) * 100 : 100;
           
+          // Determine access status - override takes precedence
           let accessStatus = 'allowed';
-          if (overallPercentage < 65) accessStatus = 'blocked';
-          else if (overallPercentage < 75) accessStatus = 'at_risk';
+          if (hasActiveOverride) {
+            accessStatus = 'allowed'; // Override grants access regardless of attendance
+          } else if (overallPercentage < 65) {
+            accessStatus = 'blocked';
+          } else if (overallPercentage < 75) {
+            accessStatus = 'at_risk';
+          }
 
           return {
             ...profile,
@@ -76,6 +95,7 @@ export function useStudents() {
             attendance_summary: summaries || [],
             overallAttendance: Math.round(overallPercentage * 100) / 100,
             accessStatus,
+            hasActiveOverride,
           };
         })
       );
