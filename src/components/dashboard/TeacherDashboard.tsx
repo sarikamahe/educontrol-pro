@@ -38,7 +38,7 @@ export default function TeacherDashboard() {
 
   const fetchDashboardData = async () => {
     try {
-      // Fetch teacher's subjects
+      // Fetch teacher's directly assigned subjects
       const { data: teacherSubjects } = await supabase
         .from('teacher_subjects')
         .select(`
@@ -48,23 +48,94 @@ export default function TeacherDashboard() {
         .eq('teacher_id', user?.id)
         .eq('is_active', true);
 
-      if (teacherSubjects) {
-        const subjectsList = teacherSubjects.map(ts => ts.subject);
-        setSubjects(subjectsList);
-        setStats(prev => ({ ...prev, totalSubjects: subjectsList.length }));
+      // Also fetch subjects linked to teacher's branch via subject_branches
+      let branchSubjects: any[] = [];
+      if (profile?.branch_id) {
+        const { data: branchLinkedSubjects } = await supabase
+          .from('subject_branches')
+          .select(`
+            subject:subjects(*)
+          `)
+          .eq('branch_id', profile.branch_id)
+          .eq('is_active', true);
+        
+        if (branchLinkedSubjects) {
+          branchSubjects = branchLinkedSubjects
+            .map(sb => sb.subject)
+            .filter(Boolean);
+        }
+      }
 
-        // Get unique students enrolled in these subjects
-        const subjectIds = subjectsList.map(s => s?.id).filter(Boolean);
-        if (subjectIds.length > 0) {
-          const { count: studentsCount } = await supabase
-            .from('enrollments')
-            .select('student_id', { count: 'exact', head: true })
-            .in('subject_id', subjectIds)
-            .eq('is_active', true);
+      // Combine and deduplicate subjects
+      const directSubjects = teacherSubjects?.map(ts => ts.subject).filter(Boolean) || [];
+      const allSubjectsMap = new Map();
+      
+      [...directSubjects, ...branchSubjects].forEach(subject => {
+        if (subject?.id && !allSubjectsMap.has(subject.id)) {
+          allSubjectsMap.set(subject.id, subject);
+        }
+      });
+      
+      const subjectsList = Array.from(allSubjectsMap.values());
+      setSubjects(subjectsList);
+      setStats(prev => ({ ...prev, totalSubjects: subjectsList.length }));
+
+      // Get students count - either enrolled in subjects or in the same branch
+      const subjectIds = subjectsList.map(s => s?.id).filter(Boolean);
+      let studentsCount = 0;
+      
+      if (subjectIds.length > 0) {
+        // Count enrolled students
+        const { count: enrolledCount } = await supabase
+          .from('enrollments')
+          .select('student_id', { count: 'exact', head: true })
+          .in('subject_id', subjectIds)
+          .eq('is_active', true);
+        
+        if (enrolledCount) studentsCount += enrolledCount;
+      }
+      
+      // Also count students in the teacher's branch
+      if (profile?.branch_id) {
+        const { data: branchStudents } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('branch_id', profile.branch_id)
+          .eq('is_active', true);
+        
+        // Get student role users in this branch
+        if (branchStudents && branchStudents.length > 0) {
+          const studentIds = branchStudents.map(p => p.id);
+          const { count: roleCount } = await supabase
+            .from('user_roles')
+            .select('user_id', { count: 'exact', head: true })
+            .in('user_id', studentIds)
+            .eq('role', 'student');
           
-          if (studentsCount !== null) {
-            setStats(prev => ({ ...prev, totalStudents: studentsCount }));
+          if (roleCount) {
+            studentsCount = Math.max(studentsCount, roleCount);
           }
+        }
+      }
+      
+      setStats(prev => ({ ...prev, totalStudents: studentsCount }));
+
+      // Fetch pending submissions to grade
+      if (subjectIds.length > 0) {
+        const { count: pendingCount } = await supabase
+          .from('submissions')
+          .select('id', { count: 'exact', head: true })
+          .eq('status', 'submitted')
+          .in('assignment_id', 
+            (await supabase
+              .from('assignments')
+              .select('id')
+              .in('subject_id', subjectIds)
+            ).data?.map(a => a.id) || []
+          );
+        
+        if (pendingCount) {
+          setStats(prev => ({ ...prev, pendingAssignments: pendingCount }));
         }
       }
 
