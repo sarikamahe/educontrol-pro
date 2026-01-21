@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { FileText, Plus, Search, Calendar, Clock, Upload, CheckCircle2, Loader2 } from 'lucide-react';
+import { FileText, Plus, Search, Calendar, Clock, Download, CheckCircle2, Loader2, ExternalLink } from 'lucide-react';
 import { format, isPast } from 'date-fns';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAssignments } from '@/hooks/useAssignments';
@@ -15,8 +15,8 @@ const getStatusBadge = (status: string, score?: number, maxScore?: number) => {
   switch (status) {
     case 'pending':
       return <Badge variant="outline"><Clock className="mr-1 h-3 w-3" />Pending</Badge>;
-    case 'submitted':
-      return <Badge className="bg-blue-500"><Upload className="mr-1 h-3 w-3" />Submitted</Badge>;
+    case 'completed':
+      return <Badge className="bg-blue-500"><CheckCircle2 className="mr-1 h-3 w-3" />Completed</Badge>;
     case 'graded':
       return <Badge className="bg-green-500"><CheckCircle2 className="mr-1 h-3 w-3" />{score}/{maxScore}</Badge>;
     default:
@@ -69,12 +69,23 @@ export default function Assignments() {
               )}
             </div>
             <div className="flex gap-2">
-              <Button variant="outline" size="sm">View Details</Button>
-              {isStudent && !isOverdue && (
-                <Button size="sm">
-                  <Upload className="mr-2 h-4 w-4" />
-                  Submit
-                </Button>
+              {assignment.attachment_url ? (
+                <>
+                  <Button variant="outline" size="sm" asChild>
+                    <a href={assignment.attachment_url} target="_blank" rel="noopener noreferrer">
+                      <ExternalLink className="mr-2 h-4 w-4" />
+                      View
+                    </a>
+                  </Button>
+                  <Button size="sm" asChild>
+                    <a href={assignment.attachment_url} download>
+                      <Download className="mr-2 h-4 w-4" />
+                      Download
+                    </a>
+                  </Button>
+                </>
+              ) : (
+                <Button variant="outline" size="sm">View Details</Button>
               )}
             </div>
           </div>
