@@ -49,25 +49,42 @@ export function useSubjectStudents(subjectId?: string) {
     queryKey: ['subject-students', subjectId],
     enabled: !!subjectId,
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data: enrollments, error } = await supabase
         .from('enrollments')
         .select(`
           *,
           profiles:student_id (
             id, email, full_name, enrollment_number, avatar_url
-          ),
-          attendance_summary:attendance_summary!inner (
-            attendance_percentage,
-            access_status,
-            total_classes,
-            classes_attended
           )
         `)
         .eq('subject_id', subjectId!)
         .eq('is_active', true);
       
       if (error) throw error;
-      return data;
+
+      // Fetch attendance summaries separately to avoid inner join exclusion
+      const enrichedEnrollments = await Promise.all(
+        (enrollments || []).map(async (enrollment) => {
+          const { data: summary } = await supabase
+            .from('attendance_summary')
+            .select('attendance_percentage, access_status, total_classes, classes_attended')
+            .eq('student_id', enrollment.student_id)
+            .eq('subject_id', subjectId!)
+            .single();
+          
+          return {
+            ...enrollment,
+            attendance_summary: summary || {
+              attendance_percentage: 0,
+              access_status: 'allowed',
+              total_classes: 0,
+              classes_attended: 0,
+            },
+          };
+        })
+      );
+      
+      return enrichedEnrollments;
     },
   });
 }
