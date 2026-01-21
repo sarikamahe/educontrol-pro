@@ -57,7 +57,10 @@ export function useStudents() {
         (data || []).map(async (student) => {
           const { data: summaries } = await supabase
             .from('attendance_summary')
-            .select('*')
+            .select(`
+              *,
+              subjects:subject_id (id, name, code)
+            `)
             .eq('student_id', student.id);
           
           // Calculate overall attendance

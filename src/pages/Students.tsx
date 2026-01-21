@@ -1,22 +1,31 @@
+import { useState } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Search, MoreHorizontal, UserPlus, ShieldCheck, ShieldX, ShieldAlert, Loader2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Search, MoreHorizontal, ShieldCheck, ShieldX, ShieldAlert, Loader2, Eye, KeyRound, ClipboardList } from 'lucide-react';
 import { AccessStatusBadge } from '@/components/dashboard/AccessStatusBadge';
 import { useAuth } from '@/contexts/AuthContext';
-import { useStudents } from '@/hooks/useStudents';
-import { useState } from 'react';
+import { useStudents, StudentWithAttendance } from '@/hooks/useStudents';
+import { StudentDetailsDialog } from '@/components/students/StudentDetailsDialog';
+import { GrantOverrideDialog } from '@/components/students/GrantOverrideDialog';
+import { StudentAttendanceDialog } from '@/components/students/StudentAttendanceDialog';
 
 export default function Students() {
   const { isSuperAdmin, isTeacher } = useAuth();
   const canManageStudents = isSuperAdmin || isTeacher;
   const { data: students, isLoading } = useStudents();
   const [search, setSearch] = useState('');
+  
+  // Dialog states
+  const [selectedStudent, setSelectedStudent] = useState<StudentWithAttendance | null>(null);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [overrideOpen, setOverrideOpen] = useState(false);
+  const [attendanceOpen, setAttendanceOpen] = useState(false);
 
   const filteredStudents = students?.filter(s =>
     s.full_name?.toLowerCase().includes(search.toLowerCase()) ||
@@ -29,6 +38,21 @@ export default function Students() {
   const atRiskCount = filteredStudents.filter(s => s.accessStatus === 'at_risk').length;
   const blockedCount = filteredStudents.filter(s => s.accessStatus === 'blocked').length;
 
+  const handleViewDetails = (student: StudentWithAttendance) => {
+    setSelectedStudent(student);
+    setDetailsOpen(true);
+  };
+
+  const handleGrantOverride = (student: StudentWithAttendance) => {
+    setSelectedStudent(student);
+    setOverrideOpen(true);
+  };
+
+  const handleViewAttendance = (student: StudentWithAttendance) => {
+    setSelectedStudent(student);
+    setAttendanceOpen(true);
+  };
+
   return (
     <DashboardLayout>
       <div className="space-y-6">
@@ -37,12 +61,6 @@ export default function Students() {
             <h1 className="text-3xl font-bold tracking-tight">Students</h1>
             <p className="text-muted-foreground">View and manage student access and attendance</p>
           </div>
-          {canManageStudents && (
-            <Button>
-              <UserPlus className="mr-2 h-4 w-4" />
-              Enroll Student
-            </Button>
-          )}
         </div>
 
         <div className="grid gap-4 md:grid-cols-3">
@@ -151,9 +169,18 @@ export default function Students() {
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                              <DropdownMenuItem>View Details</DropdownMenuItem>
-                              <DropdownMenuItem>Grant Override</DropdownMenuItem>
-                              <DropdownMenuItem>View Attendance</DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleViewDetails(student)}>
+                                <Eye className="mr-2 h-4 w-4" />
+                                View Details
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleGrantOverride(student)}>
+                                <KeyRound className="mr-2 h-4 w-4" />
+                                Grant Override
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleViewAttendance(student)}>
+                                <ClipboardList className="mr-2 h-4 w-4" />
+                                View Attendance
+                              </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
                         </TableCell>
@@ -173,6 +200,23 @@ export default function Students() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Dialogs */}
+      <StudentDetailsDialog 
+        student={selectedStudent} 
+        open={detailsOpen} 
+        onOpenChange={setDetailsOpen} 
+      />
+      <GrantOverrideDialog 
+        student={selectedStudent} 
+        open={overrideOpen} 
+        onOpenChange={setOverrideOpen} 
+      />
+      <StudentAttendanceDialog 
+        student={selectedStudent} 
+        open={attendanceOpen} 
+        onOpenChange={setAttendanceOpen} 
+      />
     </DashboardLayout>
   );
 }

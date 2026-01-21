@@ -68,26 +68,31 @@ export function useMarkAttendance() {
       marked_by: string;
       notes?: string;
     }[]) => {
-      // Use upsert with conflict on student_id + subject_id + date
+      // Use INSERT instead of UPSERT to enforce once-only marking
+      // The unique constraint will prevent duplicates
       const { data, error } = await supabase
         .from('attendance_records')
-        .upsert(records, {
-          onConflict: 'student_id,subject_id,date',
-          ignoreDuplicates: false,
-        })
+        .insert(records)
         .select();
       
-      if (error) throw error;
+      if (error) {
+        // Check if it's a duplicate key error
+        if (error.code === '23505') {
+          throw new Error('Attendance for this date has already been marked and cannot be modified.');
+        }
+        throw error;
+      }
       return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['attendance-records'] });
       queryClient.invalidateQueries({ queryKey: ['attendance-summary'] });
       queryClient.invalidateQueries({ queryKey: ['students'] });
+      queryClient.invalidateQueries({ queryKey: ['student-attendance'] });
       toast.success('Attendance saved successfully');
     },
     onError: (error: Error) => {
-      toast.error('Failed to save attendance: ' + error.message);
+      toast.error(error.message);
     },
   });
 }

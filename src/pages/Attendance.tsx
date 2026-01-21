@@ -8,7 +8,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { CalendarIcon, Check, X, Clock, Save, Loader2 } from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { CalendarIcon, Check, X, Clock, Save, Loader2, Lock, AlertTriangle } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
@@ -25,24 +26,34 @@ export default function Attendance() {
   const [selectedSubject, setSelectedSubject] = useState<string>('');
   const [attendanceData, setAttendanceData] = useState<Record<string, AttendanceEntry>>({});
   
-  const { user, isSuperAdmin, isTeacher } = useAuth();
+  const { user, isSuperAdmin, isTeacher, profile } = useAuth();
   const canManageAttendance = isSuperAdmin || isTeacher;
   
-  const { data: subjects, isLoading: subjectsLoading } = useSubjects();
+  // For teachers, filter subjects by their branch
+  const { data: allSubjects, isLoading: subjectsLoading } = useSubjects();
+  const subjects = isTeacher && profile?.branch_id 
+    ? allSubjects?.filter(s => s.branch_id === profile.branch_id) 
+    : allSubjects;
+  
   const { data: enrolledStudents, isLoading: studentsLoading } = useEnrolledStudents(selectedSubject || undefined);
-  const { data: existingRecords } = useAttendanceRecords(
+  const { data: existingRecords, isLoading: recordsLoading } = useAttendanceRecords(
     selectedSubject || undefined, 
     format(date, 'yyyy-MM-dd')
   );
   const markAttendance = useMarkAttendance();
 
+  // Check if attendance is already marked (locked)
+  const isAttendanceLocked = existingRecords && existingRecords.length > 0;
+  const markedBy = existingRecords?.[0]?.marked_by;
+  const markedAt = existingRecords?.[0]?.created_at;
+
   // Initialize attendance data from existing records
   useEffect(() => {
-    if (existingRecords && enrolledStudents) {
+    if (enrolledStudents) {
       const newAttendanceData: Record<string, AttendanceEntry> = {};
       
       enrolledStudents.forEach(enrollment => {
-        const existingRecord = existingRecords.find(
+        const existingRecord = existingRecords?.find(
           r => r.student_id === enrollment.profiles?.id
         );
         newAttendanceData[enrollment.profiles?.id || ''] = {
@@ -56,6 +67,8 @@ export default function Attendance() {
   }, [existingRecords, enrolledStudents]);
 
   const toggleStatus = (studentId: string, newStatus: 'present' | 'absent' | 'late') => {
+    if (isAttendanceLocked) return; // Prevent changes if locked
+    
     setAttendanceData(prev => ({
       ...prev,
       [studentId]: {
@@ -66,7 +79,7 @@ export default function Attendance() {
   };
 
   const handleSaveAttendance = () => {
-    if (!selectedSubject || !user) return;
+    if (!selectedSubject || !user || isAttendanceLocked) return;
     
     const records = Object.values(attendanceData)
       .filter(entry => entry.status !== 'not_marked')
@@ -96,7 +109,7 @@ export default function Attendance() {
     }
   };
 
-  const isLoading = subjectsLoading || studentsLoading;
+  const isLoading = subjectsLoading || studentsLoading || recordsLoading;
 
   return (
     <DashboardLayout>
@@ -106,7 +119,7 @@ export default function Attendance() {
             <h1 className="text-3xl font-bold tracking-tight">Attendance</h1>
             <p className="text-muted-foreground">Mark and manage student attendance</p>
           </div>
-          {canManageAttendance && selectedSubject && (
+          {canManageAttendance && selectedSubject && !isAttendanceLocked && (
             <Button onClick={handleSaveAttendance} disabled={markAttendance.isPending}>
               {markAttendance.isPending ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -145,14 +158,39 @@ export default function Attendance() {
           </Popover>
         </div>
 
+        {/* Locked Attendance Alert */}
+        {isAttendanceLocked && selectedSubject && (
+          <Alert variant="default" className="border-yellow-500/50 bg-yellow-500/10">
+            <Lock className="h-4 w-4 text-yellow-600" />
+            <AlertDescription className="text-yellow-700 dark:text-yellow-400">
+              Attendance for this date has already been marked and cannot be modified.
+              {markedAt && (
+                <span className="block text-xs mt-1">
+                  Marked on {format(new Date(markedAt), 'PPP p')}
+                </span>
+              )}
+            </AlertDescription>
+          </Alert>
+        )}
+
         <Card>
           <CardHeader>
-            <CardTitle>Mark Attendance</CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle>
+                {isAttendanceLocked ? 'Attendance Record (Read-only)' : 'Mark Attendance'}
+              </CardTitle>
+              {isAttendanceLocked && (
+                <Badge variant="outline" className="gap-1">
+                  <Lock className="h-3 w-3" /> Locked
+                </Badge>
+              )}
+            </div>
           </CardHeader>
           <CardContent>
             {!selectedSubject ? (
               <div className="text-center py-12 text-muted-foreground">
-                Please select a subject to mark attendance
+                <AlertTriangle className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                <p>Please select a subject to mark attendance</p>
               </div>
             ) : isLoading ? (
               <div className="flex items-center justify-center py-12">
@@ -165,8 +203,8 @@ export default function Attendance() {
                     <TableHead>Student</TableHead>
                     <TableHead>Enrollment No.</TableHead>
                     <TableHead>Overall Attendance</TableHead>
-                    <TableHead>Today's Status</TableHead>
-                    {canManageAttendance && <TableHead>Actions</TableHead>}
+                    <TableHead>Status</TableHead>
+                    {canManageAttendance && !isAttendanceLocked && <TableHead>Actions</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -203,7 +241,7 @@ export default function Attendance() {
                           </div>
                         </TableCell>
                         <TableCell>{getStatusBadge(studentStatus)}</TableCell>
-                        {canManageAttendance && (
+                        {canManageAttendance && !isAttendanceLocked && (
                           <TableCell>
                             <div className="flex gap-1">
                               <Button
@@ -238,7 +276,7 @@ export default function Attendance() {
                   })}
                   {(!enrolledStudents || enrolledStudents.length === 0) && (
                     <TableRow>
-                      <TableCell colSpan={canManageAttendance ? 5 : 4} className="text-center py-8 text-muted-foreground">
+                      <TableCell colSpan={canManageAttendance && !isAttendanceLocked ? 5 : 4} className="text-center py-8 text-muted-foreground">
                         No students enrolled in this subject
                       </TableCell>
                     </TableRow>
