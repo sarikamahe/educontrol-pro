@@ -40,10 +40,19 @@ export function CreateAssignmentDialog({ open, onOpenChange }: CreateAssignmentD
   // Auto-select teacher's branch
   const effectiveBranchId = isTeacher && profile?.branch_id ? profile.branch_id : branchId;
   
-  // Filter subjects by selected branch
-  const filteredSubjects = subjects?.filter(s => 
-    s.is_active && s.branch_id === effectiveBranchId
-  ) || [];
+  // Filter subjects by selected branch using junction table
+  const filteredSubjects = subjects?.filter(s => {
+    if (!s.is_active) return false;
+    
+    // Check if subject has this branch via junction table
+    if (s.subject_branches && s.subject_branches.length > 0) {
+      return s.subject_branches.some(
+        (sb: any) => sb.is_active && sb.branch_id === effectiveBranchId
+      );
+    }
+    // Fall back to single branch_id
+    return s.branch_id === effectiveBranchId;
+  }) || [];
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
