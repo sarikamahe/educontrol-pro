@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { FolderOpen, Plus, Search, FileText, Video, File, Download, Lock, Eye, Loader2 } from 'lucide-react';
+import { FolderOpen, Plus, Search, FileText, Video, File, Download, Eye, Loader2 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useResources } from '@/hooks/useResources';
 import { UploadResourceDialog } from '@/components/resources/UploadResourceDialog';
@@ -47,11 +47,11 @@ export default function Resources() {
     window.open(fileUrl, '_blank');
   };
 
-  const renderResourceCard = (resource: any, showLocked = true) => {
-    const isLocked = resource.is_attendance_required && !canManageResources;
-    
+  const renderResourceCard = (resource: any) => {
+    // If student can see this resource via RLS, they have access
+    // RLS already filters out resources the student can't access
     return (
-      <Card key={resource.id} className={`hover:shadow-md transition-shadow ${isLocked ? 'opacity-75' : ''}`}>
+      <Card key={resource.id} className="hover:shadow-md transition-shadow">
         <CardHeader className="flex flex-row items-start gap-4 space-y-0">
           <div className="p-2 bg-muted rounded-lg">
             {getFileIcon(resource.resource_type)}
@@ -60,9 +60,6 @@ export default function Resources() {
             <CardTitle className="text-base line-clamp-2">{resource.title}</CardTitle>
             <p className="text-sm text-muted-foreground">{resource.subjects?.name || 'Unknown Subject'}</p>
           </div>
-          {isLocked && showLocked && (
-            <Lock className="h-4 w-4 text-destructive" />
-          )}
         </CardHeader>
         <CardContent>
           <div className="flex items-center justify-between">
@@ -74,7 +71,6 @@ export default function Resources() {
               <Button 
                 size="sm" 
                 variant="ghost" 
-                disabled={isLocked}
                 onClick={() => resource.file_url && handleDownload(resource.file_url, resource.file_name || 'download')}
               >
                 <Eye className="h-4 w-4" />
@@ -82,18 +78,12 @@ export default function Resources() {
               <Button 
                 size="sm" 
                 variant="ghost" 
-                disabled={isLocked}
                 onClick={() => resource.file_url && handleDownload(resource.file_url, resource.file_name || 'download')}
               >
                 <Download className="h-4 w-4" />
               </Button>
             </div>
           </div>
-          {isLocked && showLocked && (
-            <p className="text-xs text-destructive mt-2">
-              Locked: Attendance below 75%
-            </p>
-          )}
         </CardContent>
       </Card>
     );
