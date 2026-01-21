@@ -102,7 +102,17 @@ export function useEnrolledStudents(subjectId?: string) {
     queryKey: ['enrolled-students', subjectId],
     enabled: !!subjectId,
     queryFn: async () => {
-      const { data: enrollments, error } = await supabase
+      // First, get the subject's branch
+      const { data: subject, error: subjectError } = await supabase
+        .from('subjects')
+        .select('branch_id')
+        .eq('id', subjectId!)
+        .single();
+      
+      if (subjectError) throw subjectError;
+
+      // Check for explicit enrollments first
+      const { data: enrollments, error: enrollError } = await supabase
         .from('enrollments')
         .select(`
           *,
@@ -113,17 +123,51 @@ export function useEnrolledStudents(subjectId?: string) {
         .eq('subject_id', subjectId!)
         .eq('is_active', true);
       
-      if (error) throw error;
+      if (enrollError) throw enrollError;
 
-      // Fetch attendance summaries separately
+      // If no explicit enrollments, get all students from the subject's branch
+      let studentsList: any[] = [];
+      
+      if (enrollments && enrollments.length > 0) {
+        studentsList = enrollments;
+      } else if (subject?.branch_id) {
+        // Get all active students in the branch
+        const { data: branchStudents, error: branchError } = await supabase
+          .from('profiles')
+          .select('id, full_name, email, enrollment_number, avatar_url')
+          .eq('branch_id', subject.branch_id)
+          .eq('is_active', true);
+        
+        if (branchError) throw branchError;
+
+        // Filter to only students (check user_roles)
+        const { data: studentRoles } = await supabase
+          .from('user_roles')
+          .select('user_id')
+          .eq('role', 'student');
+        
+        const studentIds = new Set(studentRoles?.map(r => r.user_id) || []);
+        
+        studentsList = (branchStudents || [])
+          .filter(p => studentIds.has(p.id))
+          .map(profile => ({
+            id: `branch-${profile.id}`,
+            student_id: profile.id,
+            subject_id: subjectId,
+            is_active: true,
+            profiles: profile,
+          }));
+      }
+
+      // Fetch attendance summaries for all students
       const enrichedEnrollments = await Promise.all(
-        (enrollments || []).map(async (enrollment) => {
+        studentsList.map(async (enrollment) => {
           const { data: summary } = await supabase
             .from('attendance_summary')
             .select('*')
             .eq('student_id', enrollment.student_id)
             .eq('subject_id', subjectId!)
-            .single();
+            .maybeSingle();
           
           return {
             ...enrollment,
