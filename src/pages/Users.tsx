@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -6,10 +7,12 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { UserPlus, Search, MoreHorizontal, Shield, GraduationCap, Users as UsersIcon, Loader2 } from 'lucide-react';
-import { useUsers } from '@/hooks/useUsers';
-import { useState } from 'react';
+import { Search, MoreHorizontal, Shield, GraduationCap, Users as UsersIcon, Loader2, Pencil, UserCog, Trash2 } from 'lucide-react';
+import { useUsers, UserWithRole } from '@/hooks/useUsers';
 import { useAuth } from '@/contexts/AuthContext';
+import { EditUserDialog } from '@/components/users/EditUserDialog';
+import { ChangeRoleDialog } from '@/components/users/ChangeRoleDialog';
+import { DeleteUserDialog } from '@/components/users/DeleteUserDialog';
 
 const getRoleBadge = (roles: string[]) => {
   if (roles.includes('super_admin')) {
@@ -24,7 +27,12 @@ const getRoleBadge = (roles: string[]) => {
 export default function Users() {
   const { data: users, isLoading } = useUsers();
   const [search, setSearch] = useState('');
-  const { isSuperAdmin } = useAuth();
+  const { isSuperAdmin, user: currentUser } = useAuth();
+  
+  // Dialog states
+  const [editUser, setEditUser] = useState<UserWithRole | null>(null);
+  const [roleUser, setRoleUser] = useState<UserWithRole | null>(null);
+  const [deleteUser, setDeleteUser] = useState<UserWithRole | null>(null);
 
   const filteredUsers = users?.filter(u =>
     u.full_name?.toLowerCase().includes(search.toLowerCase()) ||
@@ -39,12 +47,6 @@ export default function Users() {
             <h1 className="text-3xl font-bold tracking-tight">User Management</h1>
             <p className="text-muted-foreground">Manage users, roles, and permissions</p>
           </div>
-          {isSuperAdmin && (
-            <Button>
-              <UserPlus className="mr-2 h-4 w-4" />
-              Add User
-            </Button>
-          )}
         </div>
 
         <Card>
@@ -108,9 +110,23 @@ export default function Users() {
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                              <DropdownMenuItem>Edit User</DropdownMenuItem>
-                              <DropdownMenuItem>Change Role</DropdownMenuItem>
-                              <DropdownMenuItem className="text-destructive">Deactivate</DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => setEditUser(user)}>
+                                <Pencil className="mr-2 h-4 w-4" />
+                                Edit User
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => setRoleUser(user)}>
+                                <UserCog className="mr-2 h-4 w-4" />
+                                Change Role
+                              </DropdownMenuItem>
+                              {user.id !== currentUser?.id && (
+                                <DropdownMenuItem 
+                                  onClick={() => setDeleteUser(user)}
+                                  className="text-destructive"
+                                >
+                                  <Trash2 className="mr-2 h-4 w-4" />
+                                  Delete User
+                                </DropdownMenuItem>
+                              )}
                             </DropdownMenuContent>
                           </DropdownMenu>
                         </TableCell>
@@ -123,6 +139,23 @@ export default function Users() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Dialogs */}
+      <EditUserDialog 
+        user={editUser} 
+        open={!!editUser} 
+        onOpenChange={(open) => !open && setEditUser(null)} 
+      />
+      <ChangeRoleDialog 
+        user={roleUser} 
+        open={!!roleUser} 
+        onOpenChange={(open) => !open && setRoleUser(null)} 
+      />
+      <DeleteUserDialog 
+        user={deleteUser} 
+        open={!!deleteUser} 
+        onOpenChange={(open) => !open && setDeleteUser(null)} 
+      />
     </DashboardLayout>
   );
 }

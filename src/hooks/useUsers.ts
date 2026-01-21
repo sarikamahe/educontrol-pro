@@ -9,12 +9,14 @@ export interface UserWithRole {
   full_name: string | null;
   avatar_url: string | null;
   branch_id: string | null;
+  enrollment_number: string | null;
   is_active: boolean;
   roles: AppRole[];
   branch?: {
+    id: string;
     name: string;
     code: string;
-  };
+  } | null;
 }
 
 export function useUsers() {
@@ -25,7 +27,7 @@ export function useUsers() {
         .from('profiles')
         .select(`
           *,
-          branches:branch_id (name, code)
+          branches:branch_id (id, name, code)
         `)
         .order('full_name');
       
@@ -40,18 +42,23 @@ export function useUsers() {
             .eq('user_id', profile.id);
           
           return {
-            ...profile,
+            id: profile.id,
+            email: profile.email,
+            full_name: profile.full_name,
+            avatar_url: profile.avatar_url,
+            branch_id: profile.branch_id,
+            enrollment_number: profile.enrollment_number,
+            is_active: profile.is_active,
             branch: profile.branches,
-            roles: roles?.map(r => r.role as AppRole) || ['student'],
-          };
+            roles: roles?.map(r => r.role as AppRole) || ['student' as AppRole],
+          } as UserWithRole;
         })
       );
 
-      return usersWithRoles as UserWithRole[];
+      return usersWithRoles;
     },
   });
 }
-
 export function useUpdateUserRole() {
   const queryClient = useQueryClient();
   

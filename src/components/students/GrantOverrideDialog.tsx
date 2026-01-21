@@ -35,7 +35,7 @@ export function GrantOverrideDialog({ student, open, onOpenChange }: GrantOverri
     
     await grantOverride.mutateAsync({
       studentId: student.id,
-      subjectId: subjectId || undefined,
+      subjectId: subjectId === 'all' ? undefined : subjectId,
       reason,
       grantedBy: user.id,
       expiresAt: expiresAt?.toISOString(),
@@ -70,7 +70,7 @@ export function GrantOverrideDialog({ student, open, onOpenChange }: GrantOverri
                 <SelectValue placeholder="All subjects (global override)" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All subjects (global)</SelectItem>
+                <SelectItem value="all">All subjects (global)</SelectItem>
                 {subjects?.filter(s => s.is_active).map((subject) => (
                   <SelectItem key={subject.id} value={subject.id}>
                     {subject.name}

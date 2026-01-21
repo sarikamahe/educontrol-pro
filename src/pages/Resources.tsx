@@ -8,7 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { FolderOpen, Plus, Search, FileText, Video, File, Download, Lock, Eye, Loader2 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useResources } from '@/hooks/useResources';
-import { supabase } from '@/integrations/supabase/client';
+import { UploadResourceDialog } from '@/components/resources/UploadResourceDialog';
 
 const getFileIcon = (type: string) => {
   switch (type) {
@@ -29,10 +29,11 @@ const formatFileSize = (bytes: number | null) => {
 };
 
 export default function Resources() {
-  const { isSuperAdmin, isTeacher, user } = useAuth();
+  const { isSuperAdmin, isTeacher } = useAuth();
   const canManageResources = isSuperAdmin || isTeacher;
   const { data: resources, isLoading } = useResources();
   const [search, setSearch] = useState('');
+  const [uploadOpen, setUploadOpen] = useState(false);
 
   const filteredResources = resources?.filter(r =>
     r.title?.toLowerCase().includes(search.toLowerCase()) ||
@@ -107,7 +108,7 @@ export default function Resources() {
             <p className="text-muted-foreground">Access course materials, lectures, and documents</p>
           </div>
           {canManageResources && (
-            <Button>
+            <Button onClick={() => setUploadOpen(true)}>
               <Plus className="mr-2 h-4 w-4" />
               Upload Resource
             </Button>
@@ -144,6 +145,12 @@ export default function Resources() {
                   <CardContent className="py-12 text-center text-muted-foreground">
                     <FolderOpen className="h-12 w-12 mx-auto mb-4 opacity-50" />
                     <p>No resources found</p>
+                    {canManageResources && (
+                      <Button variant="outline" className="mt-4" onClick={() => setUploadOpen(true)}>
+                        <Plus className="mr-2 h-4 w-4" />
+                        Upload your first resource
+                      </Button>
+                    )}
                   </CardContent>
                 </Card>
               ) : (
@@ -185,6 +192,9 @@ export default function Resources() {
           </Tabs>
         )}
       </div>
+
+      {/* Upload Dialog */}
+      <UploadResourceDialog open={uploadOpen} onOpenChange={setUploadOpen} />
     </DashboardLayout>
   );
 }

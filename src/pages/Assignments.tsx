@@ -9,6 +9,7 @@ import { FileText, Plus, Search, Calendar, Clock, Upload, Lock, CheckCircle2, Lo
 import { format, isPast } from 'date-fns';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAssignments } from '@/hooks/useAssignments';
+import { CreateAssignmentDialog } from '@/components/assignments/CreateAssignmentDialog';
 
 const getStatusBadge = (status: string, score?: number, maxScore?: number) => {
   switch (status) {
@@ -24,10 +25,11 @@ const getStatusBadge = (status: string, score?: number, maxScore?: number) => {
 };
 
 export default function Assignments() {
-  const { isSuperAdmin, isTeacher, isStudent, user } = useAuth();
+  const { isSuperAdmin, isTeacher, isStudent } = useAuth();
   const canManageAssignments = isSuperAdmin || isTeacher;
   const { data: assignments, isLoading } = useAssignments();
   const [search, setSearch] = useState('');
+  const [createOpen, setCreateOpen] = useState(false);
 
   const filteredAssignments = assignments?.filter(a =>
     a.title?.toLowerCase().includes(search.toLowerCase()) ||
@@ -100,7 +102,7 @@ export default function Assignments() {
             <p className="text-muted-foreground">View and submit your assignments</p>
           </div>
           {canManageAssignments && (
-            <Button>
+            <Button onClick={() => setCreateOpen(true)}>
               <Plus className="mr-2 h-4 w-4" />
               Create Assignment
             </Button>
@@ -137,6 +139,12 @@ export default function Assignments() {
                   <CardContent className="py-12 text-center text-muted-foreground">
                     <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
                     <p>No assignments found</p>
+                    {canManageAssignments && (
+                      <Button variant="outline" className="mt-4" onClick={() => setCreateOpen(true)}>
+                        <Plus className="mr-2 h-4 w-4" />
+                        Create your first assignment
+                      </Button>
+                    )}
                   </CardContent>
                 </Card>
               ) : (
@@ -178,6 +186,9 @@ export default function Assignments() {
           </Tabs>
         )}
       </div>
+
+      {/* Create Dialog */}
+      <CreateAssignmentDialog open={createOpen} onOpenChange={setCreateOpen} />
     </DashboardLayout>
   );
 }
