@@ -31,12 +31,17 @@ export function useBranchStats() {
 
       const stats = await Promise.all(
         (branches || []).map(async (branch) => {
-          // Count subjects
-          const { count: subjectCount } = await supabase
-            .from('subjects')
-            .select('*', { count: 'exact', head: true })
+          // Count subjects linked via subject_branches junction table
+          const { data: subjectBranches } = await supabase
+            .from('subject_branches')
+            .select('subject_id, subjects!inner(is_active)')
             .eq('branch_id', branch.id)
             .eq('is_active', true);
+          
+          // Filter to only count active subjects
+          const subjectCount = subjectBranches?.filter(
+            (sb: any) => sb.subjects?.is_active === true
+          ).length || 0;
 
           // Count students
           const { count: studentCount } = await supabase
@@ -47,7 +52,7 @@ export function useBranchStats() {
 
           return {
             ...branch,
-            subjectCount: subjectCount || 0,
+            subjectCount,
             studentCount: studentCount || 0,
           };
         })
